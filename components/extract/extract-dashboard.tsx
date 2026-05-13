@@ -10,6 +10,7 @@ import {
   Braces,
   ChevronDown,
   Code2,
+  Copy,
   Download,
   Link2,
   Loader2,
@@ -80,6 +81,16 @@ function statusBadge(status: ExtractionStatus) {
 function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
   const reduceMotion = useReducedMotion()
 
+  function downloadRow(row: ExtractionRecord) {
+    if (!row.resultText) return
+    const blob = new Blob([row.resultText], { type: "text/plain;charset=utf-8" })
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    a.download = `extraction-${row.id.slice(0, 8)}.txt`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   if (records.length === 0) {
     return (
       <GlassPanel className="overflow-hidden p-6 sm:p-8">
@@ -149,8 +160,10 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  className="rounded-xl text-muted-foreground hover:text-foreground"
+                  className="rounded-xl text-muted-foreground hover:text-foreground disabled:opacity-40"
                   aria-label="Download result"
+                  disabled={!row.resultText}
+                  onClick={() => downloadRow(row)}
                 >
                   <Download className="size-4" />
                 </Button>
@@ -184,8 +197,10 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="rounded-xl"
+                  className="rounded-xl disabled:opacity-40"
                   aria-label="Download result"
+                  disabled={!row.resultText}
+                  onClick={() => downloadRow(row)}
                 >
                   <Download className="size-4" />
                   Download
@@ -200,24 +215,175 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
 }
 
 export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
+  const [targetUrl, setTargetUrl] = React.useState("")
+  const [prompt, setPrompt] = React.useState("")
+  const [headersFile, setHeadersFile] = React.useState<File | null>(null)
+  const [liveRuns, setLiveRuns] = React.useState<ExtractionRecord[]>([])
   const [loading, setLoading] = React.useState(false)
   const [getCodeBusy, setGetCodeBusy] = React.useState(false)
   const [schemaOpen, setSchemaOpen] = React.useState(false)
-  const records = React.useMemo(
+  const [schemaText, setSchemaText] = React.useState(schemaPlaceholder)
+  const [hermesStatus, setHermesStatus] = React.useState<
+    "checking" | "ok" | "error"
+  >("checking")
+  const [formError, setFormError] = React.useState<string | null>(null)
+  const [lastOutcome, setLastOutcome] = React.useState<{
+    ok: boolean
+    content?: string
+    error?: string
+    durationMs?: number
+  } | null>(null)
+
+  const baseRecords = React.useMemo(
     () => (initialEmpty ? [] : mockExtractions),
     [initialEmpty]
   )
 
+  const displayRecords = React.useMemo(
+    () => [...liveRuns, ...baseRecords],
+    [liveRuns, baseRecords]
+  )
+
   const reduceMotion = useReducedMotion()
 
-  function handleExtract() {
+  React.useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await fetch("/api/hermes/health")
+        if (!cancelled) setHermesStatus(r.ok ? "ok" : "error")
+      } catch {
+        if (!cancelled) setHermesStatus("error")
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function handleExtract() {
+    const u = targetUrl.trim()
+    const p = prompt.trim()
+    if (!u || !p) {
+      setFormError("Target URL and extraction prompt are both required.")
+      return
+    }
+    setFormError(null)
+    setLastOutcome(null)
     setLoading(true)
-    window.setTimeout(() => setLoading(false), 2200)
+
+    let headersSample: string | undefined
+    if (headersFile) {
+      try {
+        headersSample = await headersFile.text()
+      } catch {
+        setFormError("Could not read the headers / sample file.")
+        setLoading(false)
+        return
+      }
+    }
+
+    const started = Date.now()
+    try {
+      const res = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUrl: u,
+          prompt: p,
+          headersSample: headersSample || undefined,
+          jsonSchema: schemaText.trim() || undefined,
+        }),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean
+        content?: string
+        error?: string
+        detail?: string
+        durationMs?: number
+      }
+
+      const durationMs = data.durationMs ?? Date.now() - started
+      const id = crypto.randomUUID()
+      const createdAt = new Date().toISOString()
+
+      if (!res.ok || !data.ok) {
+        const errText = [
+          data.error ?? `HTTP ${res.status}`,
+          typeof data.detail === "string" ? data.detail : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+        setLastOutcome({ ok: false, error: errText, durationMs })
+        setLiveRuns((prev) => [
+          {
+            id,
+            url: u,
+            status: "failed",
+            durationMs,
+            createdAt,
+            resultText: errText,
+          },
+          ...prev,
+        ])
+        return
+      }
+
+      setLastOutcome({
+        ok: true,
+        content: data.content ?? "",
+        durationMs,
+      })
+      setLiveRuns((prev) => [
+        {
+          id,
+          url: u,
+          status: "completed",
+          durationMs,
+          createdAt,
+          resultText: data.content ?? "",
+        },
+        ...prev,
+      ])
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Network error"
+      setLastOutcome({ ok: false, error: msg, durationMs: Date.now() - started })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function handleGetCode() {
+  async function handleGetCode() {
     setGetCodeBusy(true)
-    window.setTimeout(() => setGetCodeBusy(false), 1200)
+    try {
+      const example = {
+        targetUrl: targetUrl.trim() || "https://example.com",
+        prompt:
+          prompt.trim() ||
+          "Extract the main product title and price as JSON.",
+        headersSample: "// optional: paste HAR / headers text",
+        jsonSchema: schemaText.trim() || undefined,
+      }
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : ""
+      const snippet = `// Proxies to Hermes OpenAI-compatible API (server-side)
+const res = await fetch("${origin}/api/extract", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: ${JSON.stringify(JSON.stringify(example))},
+})
+const data = await res.json()
+if (!data.ok) throw new Error(data.error ?? "Extract failed")
+console.log(data.content)`
+      await navigator.clipboard.writeText(snippet)
+    } finally {
+      window.setTimeout(() => setGetCodeBusy(false), 400)
+    }
+  }
+
+  async function copyResult() {
+    if (!lastOutcome?.ok || !lastOutcome.content) return
+    await navigator.clipboard.writeText(lastOutcome.content)
   }
 
   return (
@@ -274,6 +440,8 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
               <Link2 className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="url"
+                value={targetUrl}
+                onChange={(e) => setTargetUrl(e.target.value)}
                 placeholder="https://example.com"
                 className="h-12 rounded-xl border-border/80 bg-background/50 pl-11 text-base shadow-sm transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-14 md:text-[0.95rem]"
               />
@@ -284,7 +452,10 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
             </p>
           </div>
 
-          <FileUploadField id="extraction-source-file" />
+          <FileUploadField
+            id="extraction-source-file"
+            onFileChange={setHeadersFile}
+          />
 
           <div className="space-y-2">
             <Label
@@ -295,6 +466,8 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
             </Label>
             <Textarea
               id="prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
               placeholder="Extract product title, price, description, images, SKU, and specifications..."
               className="min-h-[140px] rounded-xl border-border/80 bg-background/50 text-base leading-relaxed shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 sm:min-h-[160px] md:min-h-[180px]"
             />
@@ -317,17 +490,71 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
                 )}
               />
             </CollapsibleTrigger>
-            <CollapsibleContent className="border-t border-border/60 px-4 pb-4 pt-2 dark:border-white/10 sm:px-5 sm:pb-5">
-              <pre className="max-h-48 overflow-auto rounded-xl border border-border/60 bg-background/80 p-4 font-mono text-xs leading-relaxed text-foreground/90 shadow-inner dark:border-white/10 dark:bg-black/40 sm:text-sm">
-                <code>{schemaPlaceholder}</code>
-              </pre>
+            <CollapsibleContent className="space-y-2 border-t border-border/60 px-4 pb-4 pt-3 dark:border-white/10 sm:px-5 sm:pb-5">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <Label
+                  htmlFor="output-schema"
+                  className="text-xs font-normal text-muted-foreground"
+                >
+                  Edit JSON Schema — the model is instructed to match it when
+                  present.
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="h-7 shrink-0 rounded-lg text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setSchemaText(schemaPlaceholder)}
+                >
+                  Reset example
+                </Button>
+              </div>
+              <Textarea
+                id="output-schema"
+                value={schemaText}
+                onChange={(e) => setSchemaText(e.target.value)}
+                spellCheck={false}
+                className="min-h-[200px] max-h-[min(420px,55vh)] w-full resize-y rounded-xl border-border/60 bg-background/80 font-mono text-xs leading-relaxed shadow-inner focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:border-white/10 dark:bg-black/40 sm:text-sm"
+                aria-label="JSON Schema output format"
+              />
             </CollapsibleContent>
           </Collapsible>
 
           <Separator className="bg-border/60 dark:bg-white/10" />
 
+          {formError ? (
+            <p className="text-sm font-medium text-destructive">{formError}</p>
+          ) : null}
+
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium dark:border-white/10",
+                  hermesStatus === "ok" &&
+                    "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
+                  hermesStatus === "error" &&
+                    "border-amber-500/35 bg-amber-500/10 text-amber-900 dark:text-amber-200",
+                  hermesStatus === "checking" &&
+                    "border-border/60 bg-background/50 text-muted-foreground"
+                )}
+              >
+                <span
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    hermesStatus === "ok" &&
+                      "bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]",
+                    hermesStatus === "error" && "bg-amber-400",
+                    hermesStatus === "checking" && "animate-pulse bg-muted-foreground/60"
+                  )}
+                />
+                Hermes:{" "}
+                {hermesStatus === "checking"
+                  ? "checking…"
+                  : hermesStatus === "ok"
+                    ? "API reachable"
+                    : "API unreachable"}
+              </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-2.5 py-1 text-xs font-medium dark:border-white/10">
                 <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]" />
                 Mode: normal
@@ -395,6 +622,46 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         </GlassPanel>
       </motion.div>
 
+      {lastOutcome ? (
+        <motion.div variants={item}>
+          <GlassPanel className="space-y-3 p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Last result
+              </h3>
+              {lastOutcome.ok && lastOutcome.content ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 rounded-lg"
+                  onClick={() => void copyResult()}
+                >
+                  <Copy className="size-3.5" />
+                  Copy
+                </Button>
+              ) : null}
+            </div>
+            {lastOutcome.ok ? (
+              <pre className="max-h-[min(360px,50vh)] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border/60 bg-background/80 p-4 font-mono text-xs leading-relaxed dark:bg-black/40 sm:text-sm">
+                {lastOutcome.content}
+              </pre>
+            ) : (
+              <pre className="max-h-[min(280px,40vh)] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-destructive/30 bg-destructive/5 p-4 font-mono text-xs text-destructive sm:text-sm">
+                {lastOutcome.error}
+              </pre>
+            )}
+            {lastOutcome.durationMs != null ? (
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {lastOutcome.durationMs}ms — Hermes{" "}
+                <code className="rounded bg-muted/50 px-1">/v1/chat/completions</code>{" "}
+                (via this app&apos;s API route)
+              </p>
+            ) : null}
+          </GlassPanel>
+        </motion.div>
+      ) : null}
+
       <motion.section variants={item} className="space-y-4 sm:space-y-5">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -407,7 +674,7 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
           </div>
         </div>
         {/* column headers — desktop only */}
-        {records.length > 0 ? (
+        {displayRecords.length > 0 ? (
           <div className="hidden px-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:grid sm:grid-cols-12 sm:gap-4">
             <div className="col-span-3">Type</div>
             <div className="col-span-5">Source</div>
@@ -415,7 +682,7 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
             <div className="col-span-2 text-right">Status</div>
           </div>
         ) : null}
-        <RecentExtractions records={records} />
+        <RecentExtractions records={displayRecords} />
       </motion.section>
     </motion.div>
   )

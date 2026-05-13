@@ -6,6 +6,8 @@ export interface ExtractionRecord {
   status: ExtractionStatus
   durationMs: number
   createdAt: string
+  /** When present, Download exports this extraction output */
+  resultText?: string
 }
 
 export const mockExtractions: ExtractionRecord[] = [
