@@ -38,6 +38,11 @@ import {
 } from "@/lib/mock-extractions"
 import { FileUploadField } from "@/components/extract/file-upload-field"
 import { HermesServerOfflineDialog } from "@/components/extract/hermes-offline-dialog"
+import { ExtractStreamProgress } from "@/components/extract/extract-stream-panel"
+import {
+  consumeChatCompletionSse,
+  type StreamToolEntry,
+} from "@/lib/extract/sse-client"
 
 async function fetchHermesHealthSignal(): Promise<{
   ok: boolean
@@ -268,6 +273,11 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
     error?: string
     durationMs?: number
   } | null>(null)
+  const [streamEntries, setStreamEntries] = React.useState<StreamToolEntry[]>(
+    []
+  )
+  const [streamingText, setStreamingText] = React.useState("")
+  const [streamActive, setStreamActive] = React.useState(false)
 
   const baseRecords = React.useMemo(
     () => (initialEmpty ? [] : mockExtractions),
@@ -314,6 +324,9 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
     }
     setFormError(null)
     setLastOutcome(null)
+    setStreamEntries([])
+    setStreamingText("")
+    setStreamActive(true)
     setLoading(true)
 
     let headersSample: string | undefined
@@ -323,13 +336,28 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
       } catch {
         setFormError("Could not read the headers / sample file.")
         setLoading(false)
+        setStreamActive(false)
         return
       }
     }
 
     const started = Date.now()
+    const id = crypto.randomUUID()
+    const createdAt = new Date().toISOString()
+
+    setStreamEntries([
+      {
+        id: crypto.randomUUID(),
+        at: Date.now(),
+        kind: "connect",
+        title: "Opening SSE stream",
+        detail:
+          "POST /api/extract/stream → Hermes /v1/chat/completions (stream: true)",
+      },
+    ])
+
     try {
-      const res = await fetch("/api/extract", {
+      const res = await fetch("/api/extract/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -339,27 +367,25 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
           jsonSchema: schemaText.trim() || undefined,
         }),
       })
-      const data = (await res.json()) as {
-        ok?: boolean
-        content?: string
-        error?: string
-        hint?: string
-        detail?: string
-        durationMs?: number
-      }
 
-      const durationMs = data.durationMs ?? Date.now() - started
-      const id = crypto.randomUUID()
-      const createdAt = new Date().toISOString()
+      const contentType = res.headers.get("content-type") ?? ""
 
-      if (!res.ok || !data.ok) {
+      if (!res.ok) {
+        let data = {} as Record<string, unknown>
+        try {
+          data = (await res.json()) as Record<string, unknown>
+        } catch {
+          /* ignore */
+        }
         const errText = [
-          data.error ?? `HTTP ${res.status}`,
+          typeof data.error === "string" ? data.error : `HTTP ${res.status}`,
           typeof data.detail === "string" ? data.detail : "",
           typeof data.hint === "string" ? data.hint : "",
         ]
           .filter(Boolean)
           .join("\n\n")
+
+        const durationMs = Date.now() - started
 
         if (res.status === 503) {
           setHermesStatus("error")
@@ -369,6 +395,18 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
           )
           setOfflineModalOpen(true)
         }
+
+        setStreamActive(false)
+        setStreamEntries((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            at: Date.now(),
+            kind: "error",
+            title: "Stream aborted",
+            detail: errText.slice(0, 1500),
+          },
+        ])
         setLastOutcome({ ok: false, error: errText, durationMs })
         setLiveRuns((prev) => [
           {
@@ -384,9 +422,41 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         return
       }
 
+      if (!contentType.includes("text/event-stream")) {
+        const fallback = await res.text()
+        const durationMs = Date.now() - started
+        setStreamActive(false)
+        const errText = `Expected event-stream, got: ${contentType}\n${fallback.slice(0, 500)}`
+        setLastOutcome({ ok: false, error: errText, durationMs })
+        setLiveRuns((prev) => [
+          {
+            id,
+            url: u,
+            status: "failed",
+            durationMs,
+            createdAt,
+            resultText: errText,
+          },
+          ...prev,
+        ])
+        return
+      }
+
+      const acc = await consumeChatCompletionSse(res, {
+        onStructured: (e) => {
+          setStreamEntries((prev) => [...prev, e])
+        },
+        onTextDelta: (delta) => {
+          setStreamingText((prev) => prev + delta)
+        },
+      })
+
+      const durationMs = Date.now() - started
+      setStreamActive(false)
+
       setLastOutcome({
         ok: true,
-        content: data.content ?? "",
+        content: acc,
         durationMs,
       })
       setLiveRuns((prev) => [
@@ -396,13 +466,25 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
           status: "completed",
           durationMs,
           createdAt,
-          resultText: data.content ?? "",
+          resultText: acc,
         },
         ...prev,
       ])
     } catch (e) {
+      const durationMs = Date.now() - started
       const msg = e instanceof Error ? e.message : "Network error"
-      setLastOutcome({ ok: false, error: msg, durationMs: Date.now() - started })
+      setStreamActive(false)
+      setStreamEntries((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          at: Date.now(),
+          kind: "error",
+          title: "Client stream error",
+          detail: msg,
+        },
+      ])
+      setLastOutcome({ ok: false, error: msg, durationMs })
     } finally {
       setLoading(false)
     }
@@ -421,15 +503,40 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
       }
       const origin =
         typeof window !== "undefined" ? window.location.origin : ""
-      const snippet = `// Proxies to Hermes OpenAI-compatible API (server-side)
-const res = await fetch("${origin}/api/extract", {
+      const snippet = `// Streaming: POST /api/extract/stream → Hermes SSE (stream: true)
+const res = await fetch("${origin}/api/extract/stream", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: ${JSON.stringify(JSON.stringify(example))},
 })
-const data = await res.json()
-if (!data.ok) throw new Error(data.error ?? "Extract failed")
-console.log(data.content)`
+if (!res.ok) {
+  const err = await res.json().catch(() => ({}))
+  throw new Error(err.error ?? "Stream failed")
+}
+const reader = res.body?.getReader()
+const dec = new TextDecoder()
+let buf = ""
+let text = ""
+while (reader) {
+  const { done, value } = await reader.read()
+  if (done) break
+  buf += dec.decode(value, { stream: true })
+  const blocks = buf.split("\\n\\n")
+  buf = blocks.pop() ?? ""
+  for (const b of blocks) {
+    for (const line of b.split("\\n")) {
+      if (!line.startsWith("data:")) continue
+      const data = line.slice(5).trim()
+      if (data === "[DONE]") continue
+      try {
+        const j = JSON.parse(data)
+        const d = j.choices?.[0]?.delta?.content
+        if (typeof d === "string") text += d
+      } catch { /* ignore */ }
+    }
+  }
+}
+console.log(text)`
       await navigator.clipboard.writeText(snippet)
     } finally {
       window.setTimeout(() => setGetCodeBusy(false), 400)
@@ -698,6 +805,14 @@ console.log(data.content)`
             </div>
           </div>
         </GlassPanel>
+      </motion.div>
+
+      <motion.div variants={item}>
+        <ExtractStreamProgress
+          active={streamActive}
+          entries={streamEntries}
+          liveText={streamingText}
+        />
       </motion.div>
 
       {lastOutcome ? (

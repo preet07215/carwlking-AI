@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { parseExtractJson } from "@/lib/extract/payload"
 import {
   HermesUpstreamError,
   hermesChatCompletion,
@@ -38,29 +39,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 })
   }
 
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 })
+  let payload: ReturnType<typeof parseExtractJson>
+  try {
+    payload = parseExtractJson(body)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Invalid body"
+    return NextResponse.json({ ok: false, error: msg }, { status: 400 })
   }
 
-  const b = body as Record<string, unknown>
-  const targetUrl = typeof b.targetUrl === "string" ? b.targetUrl.trim() : ""
-  const prompt = typeof b.prompt === "string" ? b.prompt.trim() : ""
-  const headersSample =
-    typeof b.headersSample === "string" ? b.headersSample : undefined
-  const jsonSchema = typeof b.jsonSchema === "string" ? b.jsonSchema : undefined
-
-  if (!targetUrl) {
-    return NextResponse.json(
-      { ok: false, error: "targetUrl is required" },
-      { status: 400 }
-    )
-  }
-  if (!prompt) {
-    return NextResponse.json(
-      { ok: false, error: "prompt is required" },
-      { status: 400 }
-    )
-  }
+  const { targetUrl, prompt, headersSample, jsonSchema } = payload
 
   const started = Date.now()
 

@@ -42,16 +42,19 @@ ${schemaBlock}`
   ]
 }
 
-export function chatBodyForExtract(payload: {
-  targetUrl: string
-  prompt: string
-  headersSample?: string
-  jsonSchema?: string
-}) {
+export function chatBodyForExtract(
+  payload: {
+    targetUrl: string
+    prompt: string
+    headersSample?: string
+    jsonSchema?: string
+  },
+  options?: { stream?: boolean }
+) {
   const { model } = getHermesServerConfig()
   return {
     model,
     messages: buildExtractionMessages(payload),
-    stream: false,
+    stream: options?.stream ?? false,
   }
 }
