@@ -13,6 +13,7 @@ import {
   Link2,
   Loader2,
   Sparkles,
+  Trash2,
 } from "lucide-react"
 
 import { GlassPanel } from "@/components/ui/glass-panel"
@@ -22,10 +23,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import {
-  mockExtractions,
   type ExtractionRecord,
   type ExtractionStatus,
 } from "@/lib/mock-extractions"
@@ -112,7 +113,15 @@ function statusBadge(status: ExtractionStatus) {
   return map[status]
 }
 
-function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
+function RecentExtractions({
+  records,
+  onRemove,
+  removeBusyId,
+}: {
+  records: ExtractionRecord[]
+  onRemove: (id: string) => void
+  removeBusyId: string | null
+}) {
   const reduceMotion = useReducedMotion()
 
   function downloadRow(row: ExtractionRecord) {
@@ -139,13 +148,10 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
               No extractions yet
             </h3>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Run your first extraction above. Results will appear here with
-              timing, status, and one-click export.
+              Run an extraction above. Rows appear here for this session; turn
+              on Supabase to keep history across visits.
             </p>
           </div>
-          <Button variant="outline" size="sm" className="rounded-xl" disabled>
-            Connect API (soon)
-          </Button>
         </div>
       </GlassPanel>
     )
@@ -186,13 +192,23 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
               <div className="col-span-2 text-sm tabular-nums text-muted-foreground">
                 {row.durationMs}ms
               </div>
-              <div className="col-span-2 flex justify-end gap-2">
+              <div className="col-span-2 flex justify-end gap-1">
                 <Badge
                   variant="outline"
                   className={cn("rounded-lg capitalize", statusBadge(row.status))}
                 >
                   {row.status}
                 </Badge>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="rounded-xl text-muted-foreground hover:text-destructive disabled:opacity-40"
+                  aria-label="Remove from list"
+                  disabled={removeBusyId === row.id}
+                  onClick={() => onRemove(row.id)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
                 <Button
                   size="icon-sm"
                   variant="ghost"
@@ -231,7 +247,18 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
                 <span className="tabular-nums">{row.durationMs}ms</span>
               </div>
               <Separator />
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl disabled:opacity-40"
+                  aria-label="Remove from list"
+                  disabled={removeBusyId === row.id}
+                  onClick={() => onRemove(row.id)}
+                >
+                  <Trash2 className="size-4" />
+                  Remove
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
@@ -254,11 +281,18 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
   )
 }
 
-export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
+export function ExtractDashboard() {
   const [targetUrl, setTargetUrl] = React.useState("")
   const [prompt, setPrompt] = React.useState("")
   const [headersFile, setHeadersFile] = React.useState<File | null>(null)
   const [liveRuns, setLiveRuns] = React.useState<ExtractionRecord[]>([])
+  const [storedHistory, setStoredHistory] = React.useState<ExtractionRecord[]>(
+    []
+  )
+  const [historyConfigured, setHistoryConfigured] = React.useState(false)
+  const [saveHistory, setSaveHistory] = React.useState(true)
+  const [historyClearing, setHistoryClearing] = React.useState(false)
+  const [removeBusyId, setRemoveBusyId] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [getCodeBusy, setGetCodeBusy] = React.useState(false)
   const [hermesStatus, setHermesStatus] = React.useState<
@@ -286,17 +320,111 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
     return parseAssistantResponse(lastOutcome.content)
   }, [lastOutcome?.ok, lastOutcome?.content])
 
-  const baseRecords = React.useMemo(
-    () => (initialEmpty ? [] : mockExtractions),
-    [initialEmpty]
-  )
-
-  const displayRecords = React.useMemo(
-    () => [...liveRuns, ...baseRecords],
-    [liveRuns, baseRecords]
-  )
+  const displayRecords = React.useMemo(() => {
+    if (!saveHistory || !historyConfigured) {
+      return [...liveRuns].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+    }
+    const map = new Map<string, ExtractionRecord>()
+    for (const r of storedHistory) map.set(r.id, r)
+    for (const r of liveRuns) map.set(r.id, r)
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+  }, [liveRuns, storedHistory, saveHistory, historyConfigured])
 
   const reduceMotion = useReducedMotion()
+
+  async function persistExtraction(record: ExtractionRecord) {
+    if (!saveHistory || !historyConfigured) return
+    try {
+      const r = await fetch("/api/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(record),
+      })
+      if (!r.ok) return
+      const j = (await r.json()) as { item?: ExtractionRecord }
+      if (j.item) {
+        const saved = j.item
+        setStoredHistory((prev) => [
+          saved,
+          ...prev.filter((x) => x.id !== saved.id),
+        ])
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function commitRun(record: ExtractionRecord) {
+    setLiveRuns((prev) => [record, ...prev])
+    void persistExtraction(record)
+  }
+
+  async function removeRecord(id: string) {
+    setRemoveBusyId(id)
+    try {
+      if (saveHistory && historyConfigured) {
+        const r = await fetch(`/api/history/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        })
+        if (!r.ok) return
+      }
+      setStoredHistory((prev) => prev.filter((x) => x.id !== id))
+      setLiveRuns((prev) => prev.filter((x) => x.id !== id))
+    } finally {
+      setRemoveBusyId(null)
+    }
+  }
+
+  async function clearCloudHistory() {
+    if (!historyConfigured || !saveHistory) return
+    if (
+      !window.confirm(
+        "Remove all extractions stored in Supabase? This cannot be undone."
+      )
+    ) {
+      return
+    }
+    setHistoryClearing(true)
+    try {
+      const r = await fetch("/api/history", { method: "DELETE" })
+      if (r.ok) setStoredHistory([])
+    } finally {
+      setHistoryClearing(false)
+    }
+  }
+
+  React.useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      let preferSave = true
+      try {
+        preferSave = localStorage.getItem("extraction-save-history") !== "0"
+      } catch {
+        /* ignore */
+      }
+      setSaveHistory(preferSave)
+
+      const r = await fetch("/api/history")
+      const j = (await r.json().catch(() => ({
+        configured: false,
+        items: [],
+      }))) as { configured?: boolean; items?: ExtractionRecord[] }
+      if (cancelled) return
+      setHistoryConfigured(Boolean(j.configured))
+      if (preferSave && j.configured && Array.isArray(j.items)) {
+        setStoredHistory(j.items)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -414,17 +542,15 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
           },
         ])
         setLastOutcome({ ok: false, error: errText, durationMs })
-        setLiveRuns((prev) => [
-          {
-            id,
-            url: u,
-            status: "failed",
-            durationMs,
-            createdAt,
-            resultText: errText,
-          },
-          ...prev,
-        ])
+        commitRun({
+          id,
+          url: u,
+          status: "failed",
+          durationMs,
+          createdAt,
+          resultText: errText,
+        })
+        setStreamingText("")
         return
       }
 
@@ -434,17 +560,15 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         setStreamActive(false)
         const errText = `Expected event-stream, got: ${contentType}\n${fallback.slice(0, 500)}`
         setLastOutcome({ ok: false, error: errText, durationMs })
-        setLiveRuns((prev) => [
-          {
-            id,
-            url: u,
-            status: "failed",
-            durationMs,
-            createdAt,
-            resultText: errText,
-          },
-          ...prev,
-        ])
+        commitRun({
+          id,
+          url: u,
+          status: "failed",
+          durationMs,
+          createdAt,
+          resultText: errText,
+        })
+        setStreamingText("")
         return
       }
 
@@ -459,6 +583,7 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
 
       const durationMs = Date.now() - started
       setStreamActive(false)
+      setStreamingText("")
 
       setLastOutcome({
         ok: true,
@@ -466,17 +591,14 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         durationMs,
         sourceUrl: u,
       })
-      setLiveRuns((prev) => [
-        {
-          id,
-          url: u,
-          status: "completed",
-          durationMs,
-          createdAt,
-          resultText: acc,
-        },
-        ...prev,
-      ])
+      commitRun({
+        id,
+        url: u,
+        status: "completed",
+        durationMs,
+        createdAt,
+        resultText: acc,
+      })
     } catch (e) {
       const durationMs = Date.now() - started
       const msg = e instanceof Error ? e.message : "Network error"
@@ -492,6 +614,15 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         },
       ])
       setLastOutcome({ ok: false, error: msg, durationMs })
+      commitRun({
+        id,
+        url: u,
+        status: "failed",
+        durationMs,
+        createdAt,
+        resultText: msg,
+      })
+      setStreamingText("")
     } finally {
       setLoading(false)
     }
@@ -803,7 +934,7 @@ console.log(text)`
 
       {lastOutcome ? (
         <motion.div variants={item}>
-          <GlassPanel className="space-y-3 p-5 sm:p-6">
+          <GlassPanel className="space-y-3 overflow-hidden p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -914,14 +1045,72 @@ console.log(text)`
       ) : null}
 
       <motion.section variants={item} className="space-y-4 sm:space-y-5">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1 space-y-1">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Recent extractions
             </h3>
             <p className="text-sm text-muted-foreground">
-              Live telemetry-style history with export shortcuts.
+              {historyConfigured
+                ? saveHistory
+                  ? "Session list merged with rows saved in Supabase (up to 100)."
+                  : "Session only — nothing is written to the database."
+                : "Add Supabase URL + service role key and run the SQL migration to enable saved history."}
             </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <div className="flex items-center gap-2.5">
+              <Switch
+                id="save-extraction-history"
+                checked={saveHistory}
+                disabled={!historyConfigured}
+                onCheckedChange={(checked) => {
+                  setSaveHistory(checked)
+                  try {
+                    localStorage.setItem(
+                      "extraction-save-history",
+                      checked ? "1" : "0"
+                    )
+                  } catch {
+                    /* ignore */
+                  }
+                  if (!checked) {
+                    setStoredHistory([])
+                  } else {
+                    void (async () => {
+                      const r = await fetch("/api/history")
+                      const j = (await r.json().catch(() => ({
+                        items: [],
+                      }))) as { items?: ExtractionRecord[] }
+                      if (Array.isArray(j.items)) setStoredHistory(j.items)
+                    })()
+                  }
+                }}
+              />
+              <Label
+                htmlFor="save-extraction-history"
+                className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-60"
+              >
+                Save history (Supabase)
+              </Label>
+            </div>
+            {historyConfigured && saveHistory ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="inline-flex items-center gap-2 rounded-xl"
+                disabled={
+                  historyClearing || storedHistory.length === 0
+                }
+                onClick={() => void clearCloudHistory()}
+              >
+                {historyClearing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : null}
+                Clear cloud history
+              </Button>
+            ) : null}
           </div>
         </div>
         {/* column headers — desktop only */}
@@ -930,10 +1119,14 @@ console.log(text)`
             <div className="col-span-3">Type</div>
             <div className="col-span-5">Source</div>
             <div className="col-span-2">Duration</div>
-            <div className="col-span-2 text-right">Status</div>
+            <div className="col-span-2 text-right">Actions</div>
           </div>
         ) : null}
-        <RecentExtractions records={displayRecords} />
+        <RecentExtractions
+          records={displayRecords}
+          onRemove={removeRecord}
+          removeBusyId={removeBusyId}
+        />
       </motion.section>
 
       <HermesServerOfflineDialog

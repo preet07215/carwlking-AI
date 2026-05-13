@@ -36,12 +36,12 @@ export function ExtractStreamProgress({
         </span>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="flex min-h-[140px] flex-col rounded-xl border border-border/60 bg-background/40 dark:bg-black/25">
+      <div className="grid min-h-0 gap-4 lg:grid-cols-2">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-background/40 dark:bg-black/25">
           <p className="border-b border-border/50 px-3 py-2 text-xs font-medium text-muted-foreground">
             Agent &amp; tool progress
           </p>
-          <ScrollArea className="h-[200px] sm:h-[240px]">
+          <ScrollArea className="h-[200px] min-h-0 shrink-0 sm:h-[240px]">
             <ul className="space-y-2 p-3">
               <AnimatePresence initial={false}>
                 {entries.length === 0 && active ? (
@@ -88,28 +88,49 @@ export function ExtractStreamProgress({
           </ScrollArea>
         </div>
 
-        <div className="flex min-h-[140px] flex-col rounded-xl border border-border/60 bg-background/40 dark:bg-black/25">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-background/40 dark:bg-black/25">
           <p className="border-b border-border/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-            Model output
+            Model text
             {active ? (
               <span className="ml-2 inline-flex items-center gap-1 text-primary">
                 <span className="relative flex size-2">
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-40" />
                   <span className="relative inline-flex size-2 rounded-full bg-primary" />
                 </span>
-                streaming
+                in progress
               </span>
             ) : null}
           </p>
-          <ScrollArea className="h-[200px] sm:h-[240px]">
-            <pre
+          <ScrollArea className="h-[200px] min-h-0 shrink-0 sm:h-[240px]">
+            <div
               className={cn(
-                "whitespace-pre-wrap break-words p-3 font-mono text-xs leading-relaxed text-foreground/95 sm:text-sm",
-                !liveText && "text-muted-foreground"
+                "p-3 text-sm leading-relaxed text-foreground/95",
+                active && "text-muted-foreground"
               )}
             >
-              {liveText || (active ? "…" : "—")}
-            </pre>
+              {active ? (
+                <div className="space-y-2">
+                  <p>
+                    The model is still writing. This area stays as plain text
+                    only — no raw stream is shown here. Open{" "}
+                    <span className="font-medium text-foreground/90">
+                      Last result
+                    </span>{" "}
+                    below for the full reply (tree + download).
+                  </p>
+                  {liveText.length > 0 ? (
+                    <p className="text-xs tabular-nums text-muted-foreground">
+                      {liveText.length.toLocaleString()} characters received so
+                      far
+                    </p>
+                  ) : null}
+                </div>
+              ) : liveText ? (
+                <p className="whitespace-pre-wrap break-words">{liveText}</p>
+              ) : (
+                <p className="text-muted-foreground">—</p>
+              )}
+            </div>
           </ScrollArea>
         </div>
       </div>
