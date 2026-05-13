@@ -1,4 +1,8 @@
 import { getHermesServerConfig } from "@/lib/hermes/config"
+import {
+  formatHermesConnectionHelp,
+  isLikelyConnectionFailure,
+} from "@/lib/hermes/errors"
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",
@@ -39,21 +43,46 @@ async function hermesAuthFetch(
     }
   }
 
-  return fetch(url, { ...init, headers })
+  try {
+    return await fetch(url, { ...init, headers })
+  } catch (err) {
+    if (isLikelyConnectionFailure(err)) {
+      const { error, hint, code } = formatHermesConnectionHelp(err, url)
+      const e = new Error(error)
+      ;(e as Error & { hint?: string; code?: string; cause?: unknown }).hint =
+        hint
+      if (code) {
+        ;(e as Error & { code?: string }).code = code
+      }
+      ;(e as Error & { cause?: unknown }).cause = err
+      throw e
+    }
+    throw err
+  }
 }
 
 export async function hermesHealth(): Promise<unknown> {
   const { origin, apiV1 } = getHermesServerConfig()
-  let res = await hermesAuthFetch(`${origin}/health`, {
-    method: "GET",
-    skipJsonContentType: true,
-  })
-  if (!res.ok) {
-    res = await hermesAuthFetch(`${apiV1}/health`, {
+
+  let res: Response | null = null
+  try {
+    res = await hermesAuthFetch(`${origin}/health`, {
       method: "GET",
       skipJsonContentType: true,
     })
+  } catch {
+    res = null
   }
+
+  if (res?.ok) {
+    return res.json() as Promise<unknown>
+  }
+
+  res = await hermesAuthFetch(`${apiV1}/health`, {
+    method: "GET",
+    skipJsonContentType: true,
+  })
+
   if (!res.ok) {
     const t = await res.text()
     throw new HermesUpstreamError("Health check failed", res.status, t)

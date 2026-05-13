@@ -4,6 +4,7 @@ import {
   HermesUpstreamError,
   hermesChatCompletion,
 } from "@/lib/hermes/client"
+import { formatGenericHermesFailure } from "@/lib/hermes/errors"
 import { chatBodyForExtract } from "@/lib/hermes/extract-messages"
 
 function assistantContent(data: unknown): string {
@@ -95,10 +96,19 @@ export async function POST(req: Request) {
         { status: 502 }
       )
     }
-    const message = err instanceof Error ? err.message : "Extraction failed"
+    const { message: friendly, hint } = formatGenericHermesFailure(err)
+    const extraHint =
+      err instanceof Error
+        ? (err as Error & { hint?: string }).hint
+        : undefined
     return NextResponse.json(
-      { ok: false, error: message, durationMs },
-      { status: 500 }
+      {
+        ok: false,
+        error: friendly,
+        hint: extraHint ?? hint,
+        durationMs,
+      },
+      { status: 503 }
     )
   }
 }

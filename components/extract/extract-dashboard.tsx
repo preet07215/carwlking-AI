@@ -226,6 +226,7 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
   const [hermesStatus, setHermesStatus] = React.useState<
     "checking" | "ok" | "error"
   >("checking")
+  const [hermesHelp, setHermesHelp] = React.useState<string | null>(null)
   const [formError, setFormError] = React.useState<string | null>(null)
   const [lastOutcome, setLastOutcome] = React.useState<{
     ok: boolean
@@ -251,9 +252,31 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
     ;(async () => {
       try {
         const r = await fetch("/api/hermes/health")
-        if (!cancelled) setHermesStatus(r.ok ? "ok" : "error")
+        let j: Record<string, unknown> = {}
+        try {
+          j = (await r.json()) as Record<string, unknown>
+        } catch {
+          /* ignore */
+        }
+        if (cancelled) return
+        setHermesStatus(r.ok ? "ok" : "error")
+        if (r.ok) {
+          setHermesHelp(null)
+        } else {
+          const parts = [
+            typeof j.error === "string" ? j.error : null,
+            typeof j.hint === "string" ? j.hint : null,
+            typeof j.origin === "string" ? `Configured base: ${j.origin}` : null,
+          ].filter(Boolean)
+          setHermesHelp(parts.length ? parts.join("\n\n") : "Hermes unreachable.")
+        }
       } catch {
-        if (!cancelled) setHermesStatus("error")
+        if (!cancelled) {
+          setHermesStatus("error")
+          setHermesHelp(
+            "Could not call /api/hermes/health. Is the Next.js dev server running?"
+          )
+        }
       }
     })()
     return () => {
@@ -299,6 +322,7 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         ok?: boolean
         content?: string
         error?: string
+        hint?: string
         detail?: string
         durationMs?: number
       }
@@ -311,6 +335,7 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         const errText = [
           data.error ?? `HTTP ${res.status}`,
           typeof data.detail === "string" ? data.detail : "",
+          typeof data.hint === "string" ? data.hint : "",
         ]
           .filter(Boolean)
           .join("\n\n")
@@ -526,46 +551,60 @@ console.log(data.content)`
             <p className="text-sm font-medium text-destructive">{formError}</p>
           ) : null}
 
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium dark:border-white/10",
-                  hermesStatus === "ok" &&
-                    "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
-                  hermesStatus === "error" &&
-                    "border-amber-500/35 bg-amber-500/10 text-amber-900 dark:text-amber-200",
-                  hermesStatus === "checking" &&
-                    "border-border/60 bg-background/50 text-muted-foreground"
-                )}
-              >
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 <span
                   className={cn(
-                    "size-1.5 rounded-full",
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium dark:border-white/10",
                     hermesStatus === "ok" &&
-                      "bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]",
-                    hermesStatus === "error" && "bg-amber-400",
-                    hermesStatus === "checking" && "animate-pulse bg-muted-foreground/60"
+                      "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
+                    hermesStatus === "error" &&
+                      "border-amber-500/35 bg-amber-500/10 text-amber-900 dark:text-amber-200",
+                    hermesStatus === "checking" &&
+                      "border-border/60 bg-background/50 text-muted-foreground"
                   )}
-                />
-                Hermes:{" "}
-                {hermesStatus === "checking"
-                  ? "checking…"
-                  : hermesStatus === "ok"
-                    ? "API reachable"
-                    : "API unreachable"}
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-2.5 py-1 text-xs font-medium dark:border-white/10">
-                <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]" />
-                Mode: normal
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs">
-                <Link2 className="size-3.5" aria-hidden />
-                Depth scan · 5
-              </span>
+                >
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      hermesStatus === "ok" &&
+                        "bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]",
+                      hermesStatus === "error" && "bg-amber-400",
+                      hermesStatus === "checking" &&
+                        "animate-pulse bg-muted-foreground/60"
+                    )}
+                  />
+                  Hermes:{" "}
+                  {hermesStatus === "checking"
+                    ? "checking…"
+                    : hermesStatus === "ok"
+                      ? "API reachable"
+                      : "API unreachable"}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-2.5 py-1 text-xs font-medium dark:border-white/10">
+                  <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]" />
+                  Mode: normal
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-xs">
+                  <Link2 className="size-3.5" aria-hidden />
+                  Depth scan · 5
+                </span>
+              </div>
+
+              {hermesHelp && hermesStatus !== "ok" ? (
+                <div className="w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+                  <p className="font-semibold text-amber-900 dark:text-amber-50">
+                    Hermes connection help
+                  </p>
+                  <pre className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[0.8rem] opacity-95">
+                    {hermesHelp}
+                  </pre>
+                </div>
+              ) : null}
             </div>
 
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
               <Button
                 variant="outline"
                 size="lg"
