@@ -37,6 +37,38 @@ import {
   type ExtractionStatus,
 } from "@/lib/mock-extractions"
 import { FileUploadField } from "@/components/extract/file-upload-field"
+import { HermesServerOfflineDialog } from "@/components/extract/hermes-offline-dialog"
+
+async function fetchHermesHealthSignal(): Promise<{
+  ok: boolean
+  help: string | null
+}> {
+  try {
+    const r = await fetch("/api/hermes/health")
+    let j: Record<string, unknown> = {}
+    try {
+      j = (await r.json()) as Record<string, unknown>
+    } catch {
+      /* ignore */
+    }
+    if (r.ok) return { ok: true, help: null }
+    const parts = [
+      typeof j.error === "string" ? j.error : null,
+      typeof j.hint === "string" ? j.hint : null,
+      typeof j.origin === "string" ? `Configured base: ${j.origin}` : null,
+    ].filter(Boolean)
+    return {
+      ok: false,
+      help: parts.length ? parts.join("\n\n") : "Hermes unreachable (503).",
+    }
+  } catch {
+    return {
+      ok: false,
+      help:
+        "Could not call /api/hermes/health. Is the Next.js dev server running?",
+    }
+  }
+}
 
 const schemaPlaceholder = `{
   "type": "object",
@@ -227,6 +259,8 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
     "checking" | "ok" | "error"
   >("checking")
   const [hermesHelp, setHermesHelp] = React.useState<string | null>(null)
+  const [offlineModalOpen, setOfflineModalOpen] = React.useState(false)
+  const [healthRetrying, setHealthRetrying] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
   const [lastOutcome, setLastOutcome] = React.useState<{
     ok: boolean
@@ -250,39 +284,26 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
   React.useEffect(() => {
     let cancelled = false
     ;(async () => {
-      try {
-        const r = await fetch("/api/hermes/health")
-        let j: Record<string, unknown> = {}
-        try {
-          j = (await r.json()) as Record<string, unknown>
-        } catch {
-          /* ignore */
-        }
-        if (cancelled) return
-        setHermesStatus(r.ok ? "ok" : "error")
-        if (r.ok) {
-          setHermesHelp(null)
-        } else {
-          const parts = [
-            typeof j.error === "string" ? j.error : null,
-            typeof j.hint === "string" ? j.hint : null,
-            typeof j.origin === "string" ? `Configured base: ${j.origin}` : null,
-          ].filter(Boolean)
-          setHermesHelp(parts.length ? parts.join("\n\n") : "Hermes unreachable.")
-        }
-      } catch {
-        if (!cancelled) {
-          setHermesStatus("error")
-          setHermesHelp(
-            "Could not call /api/hermes/health. Is the Next.js dev server running?"
-          )
-        }
-      }
+      const { ok, help } = await fetchHermesHealthSignal()
+      if (cancelled) return
+      setHermesStatus(ok ? "ok" : "error")
+      setHermesHelp(ok ? null : help)
+      if (!ok) setOfflineModalOpen(true)
     })()
     return () => {
       cancelled = true
     }
   }, [])
+
+  async function handleHermesHealthRetry() {
+    setHealthRetrying(true)
+    setHermesStatus("checking")
+    const { ok, help } = await fetchHermesHealthSignal()
+    setHermesStatus(ok ? "ok" : "error")
+    setHermesHelp(ok ? null : help)
+    setOfflineModalOpen(!ok)
+    setHealthRetrying(false)
+  }
 
   async function handleExtract() {
     const u = targetUrl.trim()
@@ -339,6 +360,15 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         ]
           .filter(Boolean)
           .join("\n\n")
+
+        if (res.status === 503) {
+          setHermesStatus("error")
+          setHermesHelp(
+            errText ||
+              "Hermes unreachable. Start the gateway and match HERMES_API_KEY."
+          )
+          setOfflineModalOpen(true)
+        }
         setLastOutcome({ ok: false, error: errText, durationMs })
         setLiveRuns((prev) => [
           {
@@ -586,6 +616,15 @@ console.log(data.content)`
                   <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]" />
                   Mode: normal
                 </span>
+                {hermesStatus === "error" ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-primary hover:bg-primary/15"
+                    onClick={() => setOfflineModalOpen(true)}
+                  >
+                    Server help
+                  </button>
+                ) : null}
                 <span className="inline-flex items-center gap-1.5 text-xs">
                   <Link2 className="size-3.5" aria-hidden />
                   Depth scan · 5
@@ -723,6 +762,14 @@ console.log(data.content)`
         ) : null}
         <RecentExtractions records={displayRecords} />
       </motion.section>
+
+      <HermesServerOfflineDialog
+        open={offlineModalOpen}
+        onOpenChange={setOfflineModalOpen}
+        helpText={hermesHelp}
+        onRetry={handleHermesHealthRetry}
+        retrying={healthRetrying}
+      />
     </motion.div>
   )
 }
