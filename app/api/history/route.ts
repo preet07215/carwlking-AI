@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 const MAX_RESULT_CHARS = 500_000
+const MAX_PROMPT_CHARS = 32_000
 
 const STATUSES: ExtractionStatus[] = ["completed", "running", "failed"]
 
@@ -36,6 +37,17 @@ function parseRecord(body: unknown): ExtractionRecord | NextResponse {
     }
     resultText = b.resultText
   }
+  let prompt: string | undefined
+  if (typeof b.prompt === "string") {
+    const t = b.prompt.trim()
+    if (t.length > MAX_PROMPT_CHARS) {
+      return NextResponse.json(
+        { ok: false, error: `prompt exceeds ${MAX_PROMPT_CHARS} characters` },
+        { status: 400 }
+      )
+    }
+    if (t) prompt = t
+  }
 
   if (!id || !url) {
     return NextResponse.json({ ok: false, error: "id and url required" }, { status: 400 })
@@ -50,6 +62,7 @@ function parseRecord(body: unknown): ExtractionRecord | NextResponse {
     status: status as ExtractionStatus,
     durationMs,
     createdAt,
+    prompt,
     resultText,
   }
 }
@@ -60,6 +73,17 @@ export async function GET() {
   }
   try {
     const supabase = createSupabaseAdmin()
+    const staleBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    await supabase
+      .from("extraction_history")
+      .update({
+        status: "failed",
+        result_text:
+          "Run interrupted (page refreshed, closed, or exceeded 30 minutes). Start a new extraction.",
+      })
+      .eq("status", "running")
+      .lt("created_at", staleBefore)
+
     const { data, error } = await supabase
       .from("extraction_history")
       .select("*")

@@ -6,6 +6,8 @@ export interface ExtractionRecord {
   status: ExtractionStatus
   durationMs: number
   createdAt: string
+  /** User prompt — saved when the run starts */
+  prompt?: string
   /** When present, Download exports this extraction output */
   resultText?: string
 }

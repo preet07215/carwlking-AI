@@ -86,6 +86,13 @@ function slugFromUrl(url: string): string {
   }
 }
 
+function formatReqTimer(totalSec: number): string {
+  const sec = Math.max(0, Math.floor(totalSec))
+  const m = Math.floor(sec / 60)
+  const r = sec % 60
+  return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`
+}
+
 const container: Variants = {
   hidden: { opacity: 0 },
   show: {
@@ -111,6 +118,13 @@ function statusBadge(status: ExtractionStatus) {
     failed: "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300",
   } as const
   return map[status]
+}
+
+function truncatePrompt(text: string | undefined, max = 96): string | null {
+  if (!text?.trim()) return null
+  const t = text.trim()
+  if (t.length <= max) return t
+  return `${t.slice(0, max - 1)}…`
 }
 
 function RecentExtractions({
@@ -158,7 +172,9 @@ function RecentExtractions({
 
   return (
     <div className="space-y-3">
-      {records.map((row, i) => (
+      {records.map((row, i) => {
+        const promptPreview = truncatePrompt(row.prompt)
+        return (
         <motion.div
           key={row.id}
           initial={reduceMotion ? false : { opacity: 0, y: 10 }}
@@ -184,12 +200,17 @@ function RecentExtractions({
                 <p className="truncate text-sm font-medium text-foreground">
                   {row.url}
                 </p>
+                {promptPreview ? (
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                    {promptPreview}
+                  </p>
+                ) : null}
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {formatRelativeTime(row.createdAt)}
                 </p>
               </div>
               <div className="col-span-2 text-sm tabular-nums text-muted-foreground">
-                {row.durationMs}ms
+                {row.status === "running" ? "—" : `${row.durationMs}ms`}
               </div>
               <div className="col-span-2 flex justify-end gap-1">
                 <Badge
@@ -241,9 +262,16 @@ function RecentExtractions({
               <p className="break-all text-sm font-medium leading-snug text-foreground">
                 {row.url}
               </p>
+              {promptPreview ? (
+                <p className="line-clamp-3 text-xs leading-snug text-muted-foreground">
+                  {promptPreview}
+                </p>
+              ) : null}
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>{formatRelativeTime(row.createdAt)}</span>
-                <span className="tabular-nums">{row.durationMs}ms</span>
+                <span className="tabular-nums">
+                  {row.status === "running" ? "—" : `${row.durationMs}ms`}
+                </span>
               </div>
               <Separator />
               <div className="flex justify-end gap-2">
@@ -275,7 +303,8 @@ function RecentExtractions({
             </div>
           </GlassPanel>
         </motion.div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -313,6 +342,32 @@ export function ExtractDashboard() {
   )
   const [streamingText, setStreamingText] = React.useState("")
   const [streamActive, setStreamActive] = React.useState(false)
+  const [streamStartedAt, setStreamStartedAt] = React.useState<number | null>(
+    null
+  )
+  const [streamTick, setStreamTick] = React.useState(0)
+
+  const requestTimerLabel = React.useMemo(() => {
+    if (streamActive && streamStartedAt !== null) {
+      void streamTick
+      return formatReqTimer((Date.now() - streamStartedAt) / 1000)
+    }
+    if (lastOutcome?.durationMs != null) {
+      return formatReqTimer(lastOutcome.durationMs / 1000)
+    }
+    return null
+  }, [
+    streamActive,
+    streamStartedAt,
+    lastOutcome?.durationMs,
+    streamTick,
+  ])
+
+  React.useEffect(() => {
+    if (!streamActive || streamStartedAt === null) return
+    const id = window.setInterval(() => setStreamTick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [streamActive, streamStartedAt])
 
   const lastSplit = React.useMemo(() => {
     if (!lastOutcome?.ok || !lastOutcome.content) return null
@@ -360,7 +415,10 @@ export function ExtractDashboard() {
   }
 
   function commitRun(record: ExtractionRecord) {
-    setLiveRuns((prev) => [record, ...prev])
+    setLiveRuns((prev) => {
+      const rest = prev.filter((x) => x.id !== record.id)
+      return [record, ...rest]
+    })
     void persistExtraction(record)
   }
 
@@ -459,7 +517,9 @@ export function ExtractDashboard() {
     setFormError(null)
     setLastOutcome(null)
     setStreamEntries([])
-    setStreamingText("")
+    setStreamingText(
+      "Starting — live steps and model tokens will appear here as they arrive.\n\n"
+    )
     setStreamActive(true)
     setLoading(true)
 
@@ -489,6 +549,16 @@ export function ExtractDashboard() {
           "POST /api/extract/stream → Hermes /v1/chat/completions (stream: true)",
       },
     ])
+
+    commitRun({
+      id,
+      url: u,
+      status: "running",
+      durationMs: 0,
+      createdAt,
+      prompt: p,
+    })
+    setStreamStartedAt(Date.now())
 
     try {
       const res = await fetch("/api/extract/stream", {
@@ -530,6 +600,7 @@ export function ExtractDashboard() {
         }
 
         setStreamActive(false)
+        setStreamStartedAt(null)
         setStreamEntries((prev) => [
           ...prev,
           {
@@ -547,6 +618,7 @@ export function ExtractDashboard() {
           status: "failed",
           durationMs,
           createdAt,
+          prompt: p,
           resultText: errText,
         })
         return
@@ -556,6 +628,7 @@ export function ExtractDashboard() {
         const fallback = await res.text()
         const durationMs = Date.now() - started
         setStreamActive(false)
+        setStreamStartedAt(null)
         const errText = `Expected event-stream, got: ${contentType}\n${fallback.slice(0, 500)}`
         setLastOutcome({ ok: false, error: errText, durationMs })
         commitRun({
@@ -564,6 +637,7 @@ export function ExtractDashboard() {
           status: "failed",
           durationMs,
           createdAt,
+          prompt: p,
           resultText: errText,
         })
         return
@@ -580,6 +654,7 @@ export function ExtractDashboard() {
 
       const durationMs = Date.now() - started
       setStreamActive(false)
+      setStreamStartedAt(null)
 
       setLastOutcome({
         ok: true,
@@ -593,12 +668,14 @@ export function ExtractDashboard() {
         status: "completed",
         durationMs,
         createdAt,
+        prompt: p,
         resultText: acc,
       })
     } catch (e) {
       const durationMs = Date.now() - started
       const msg = e instanceof Error ? e.message : "Network error"
       setStreamActive(false)
+      setStreamStartedAt(null)
       setStreamEntries((prev) => [
         ...prev,
         {
@@ -616,6 +693,7 @@ export function ExtractDashboard() {
         status: "failed",
         durationMs,
         createdAt,
+        prompt: p,
         resultText: msg,
       })
     } finally {
@@ -924,6 +1002,7 @@ console.log(text)`
           active={streamActive}
           entries={streamEntries}
           liveText={streamingText}
+          requestTimerLabel={requestTimerLabel}
         />
       </motion.div>
 

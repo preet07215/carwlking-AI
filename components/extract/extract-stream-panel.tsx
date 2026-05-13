@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Activity, CheckCircle2, Loader2, Wrench } from "lucide-react"
 
@@ -12,11 +13,21 @@ export function ExtractStreamProgress({
   active,
   entries,
   liveText,
+  requestTimerLabel,
 }: {
   active: boolean
   entries: StreamToolEntry[]
   liveText: string
+  requestTimerLabel?: string | null
 }) {
+  const modelTextScrollRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const el = modelTextScrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [liveText, active])
+
   if (!active && entries.length === 0 && !liveText) return null
 
   return (
@@ -30,9 +41,21 @@ export function ExtractStreamProgress({
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Live stream (SSE)
         </h3>
-        <span className="ml-auto text-xs text-muted-foreground">
-          Hermes{" "}
-          <code className="rounded bg-muted/60 px-1 py-0.5">stream: true</code>
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          {requestTimerLabel ? (
+            <span className="tabular-nums">
+              Req{" "}
+              <code className="rounded bg-muted/60 px-1 py-0.5">
+                {requestTimerLabel}
+              </code>
+            </span>
+          ) : null}
+          <span>
+            Hermes{" "}
+            <code className="rounded bg-muted/60 px-1 py-0.5">
+              stream: true
+            </code>
+          </span>
         </span>
       </div>
 
@@ -90,7 +113,7 @@ export function ExtractStreamProgress({
 
         <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-background/40 dark:bg-black/25">
           <p className="border-b border-border/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-            Model output
+            Model text
             {active ? (
               <span className="ml-2 inline-flex items-center gap-1 text-primary">
                 <span className="relative flex size-2">
@@ -101,7 +124,10 @@ export function ExtractStreamProgress({
               </span>
             ) : null}
           </p>
-          <ScrollArea className="h-[200px] min-h-0 shrink-0 sm:h-[240px]">
+          <div
+            ref={modelTextScrollRef}
+            className="h-[200px] min-h-0 shrink-0 overflow-y-auto overscroll-contain sm:h-[240px]"
+          >
             <pre
               className={cn(
                 "whitespace-pre-wrap break-words p-3 font-mono text-xs leading-relaxed text-foreground/95 sm:text-sm",
@@ -110,7 +136,7 @@ export function ExtractStreamProgress({
             >
               {liveText || (active ? "…" : "—")}
             </pre>
-          </ScrollArea>
+          </div>
         </div>
       </div>
     </GlassPanel>

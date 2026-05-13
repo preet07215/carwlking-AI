@@ -6,6 +6,64 @@ export type StreamToolEntry = {
   detail?: string
 }
 
+/** Plain text from `content` when it is a string or a parts array (Hermes / OpenAI-style). */
+function textFromContentField(content: unknown): string {
+  if (typeof content === "string" && content) return content
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (!part || typeof part !== "object") return ""
+        const p = part as Record<string, unknown>
+        if (p.type === "text" && typeof p.text === "string") return p.text
+        if (typeof p.text === "string") return p.text
+        return ""
+      })
+      .join("")
+  }
+  return ""
+}
+
+/** Token / reasoning text from a chat.completion.chunk `delta` object. */
+function extractDeltaModelText(delta: Record<string, unknown>): string {
+  const pieces: string[] = []
+  const fromContent = textFromContentField(delta.content)
+  if (fromContent) pieces.push(fromContent)
+  for (const key of ["reasoning_content", "reasoning", "thinking"] as const) {
+    const v = delta[key]
+    if (typeof v === "string" && v) pieces.push(v)
+  }
+  return pieces.join("")
+}
+
+const TOOL_FRIENDLY: Record<string, string> = {
+  browser_click: "Interacting with the page (click)…",
+  browser_snapshot: "Capturing the current page state…",
+  browser_type: "Typing into the page…",
+  browser_navigate: "Navigating to a URL…",
+  browser_scroll: "Scrolling the page…",
+  browser_wait: "Waiting for the page to settle…",
+}
+
+function friendlyToolLine(detail: string): string {
+  const key = detail.trim().split(/\s|\(/)[0] ?? detail
+  if (key && TOOL_FRIENDLY[key]) return TOOL_FRIENDLY[key]
+  return `Working: ${detail}`
+}
+
+function narrationForToolProgress(raw: string, detail: string): string {
+  const line = friendlyToolLine(detail)
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>
+    const msg = typeof o.message === "string" ? o.message.trim() : ""
+    if (msg.length > 0) {
+      return `\n\n— ${msg}\n`
+    }
+  } catch {
+    /* ignore */
+  }
+  return `\n\n— ${line}\n`
+}
+
 /** Consume Hermes / OpenAI chat completion SSE (incl. hermes.tool.progress). */
 export async function consumeChatCompletionSse(
   response: Response,
@@ -50,6 +108,7 @@ export async function consumeChatCompletionSse(
       title: "Tool / agent progress",
       detail,
     })
+    onTextDelta?.(narrationForToolProgress(raw, detail))
   }
 
   const handleEventBlock = (block: string) => {
@@ -85,9 +144,12 @@ export async function consumeChatCompletionSse(
         const d = (choices[0] as Record<string, unknown>).delta as
           | Record<string, unknown>
           | undefined
-        if (d && typeof d.content === "string" && d.content) {
-          assembled += d.content
-          onTextDelta?.(d.content)
+        if (d) {
+          const modelText = extractDeltaModelText(d)
+          if (modelText) {
+            assembled += modelText
+            onTextDelta?.(modelText)
+          }
         }
       }
     } catch {

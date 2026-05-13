@@ -6,6 +6,7 @@ export type ExtractionHistoryRow = {
   status: string
   duration_ms: number
   created_at: string
+  prompt: string | null
   result_text: string | null
 }
 
@@ -24,6 +25,7 @@ export function dbRowToRecord(row: ExtractionHistoryRow): ExtractionRecord {
     status: asStatus(row.status),
     durationMs: row.duration_ms,
     createdAt: row.created_at,
+    prompt: row.prompt ?? undefined,
     resultText: row.result_text ?? undefined,
   }
 }
@@ -35,6 +37,7 @@ export function recordToDbRow(r: ExtractionRecord): ExtractionHistoryRow {
     status: r.status,
     duration_ms: r.durationMs,
     created_at: r.createdAt,
+    prompt: r.prompt ?? null,
     result_text: r.resultText ?? null,
   }
 }
