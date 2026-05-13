@@ -152,13 +152,13 @@ function RecentExtractions({
 
   if (records.length === 0) {
     return (
-      <GlassPanel className="overflow-hidden p-6 sm:p-8">
-        <div className="flex flex-col items-center justify-center gap-4 py-10 text-center">
-          <div className="flex size-14 items-center justify-center rounded-2xl border border-dashed border-primary/30 bg-primary/5 shadow-inner">
-            <Sparkles className="size-7 text-primary/80" />
+      <GlassPanel className="overflow-hidden p-4 sm:p-5">
+        <div className="flex flex-col items-center justify-center gap-3 py-6 text-center sm:py-7">
+          <div className="flex size-11 items-center justify-center rounded-xl border border-dashed border-primary/30 bg-primary/5 shadow-inner">
+            <Sparkles className="size-6 text-primary/80" />
           </div>
-          <div className="max-w-sm space-y-2">
-            <h3 className="text-lg font-semibold tracking-tight">
+          <div className="max-w-sm space-y-1">
+            <h3 className="text-base font-semibold tracking-tight sm:text-lg">
               No extractions yet
             </h3>
             <p className="text-sm leading-relaxed text-muted-foreground">
@@ -779,9 +779,9 @@ console.log(text)`
       variants={container}
       initial="hidden"
       animate="show"
-      className="flex flex-col gap-8 sm:gap-10 lg:gap-12"
+      className="flex flex-col gap-4 sm:gap-5 lg:gap-6"
     >
-      <motion.header variants={item} className="relative space-y-4">
+      <motion.header variants={item} className="relative space-y-2">
         <div
           className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] opacity-80 blur-3xl"
           aria-hidden
@@ -802,26 +802,22 @@ console.log(text)`
           />
         </div>
         <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-black/20">
-            <Sparkles className="size-3.5 text-primary" />
-            AI extraction studio
-          </div>
+          
           <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-[2.75rem] lg:leading-[1.1]">
             Extract
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-black/20">
+              <Sparkles className="size-3.5 text-primary ml-2" />
+                AI extraction studio
+              </div>
           </h2>
           <p className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Extract structured data from any webpage. The assistant always
-            replies with JSON; save it from the result panel as a{" "}
-            <code className="rounded-md bg-muted/80 px-1.5 py-0.5 text-[0.9em]">
-              .json
-            </code>{" "}
-            file.
+            Extract structured data from any webpage.
           </p>
         </div>
       </motion.header>
 
       <motion.div variants={item}>
-        <GlassPanel className="space-y-6 overflow-visible p-5 sm:p-7 lg:p-8">
+        <GlassPanel className="space-y-4 overflow-visible p-4 sm:p-5 lg:p-6">
           <div className="space-y-2">
             <Label
               htmlFor="url"
@@ -836,7 +832,7 @@ console.log(text)`
                 value={targetUrl}
                 onChange={(e) => setTargetUrl(e.target.value)}
                 placeholder="https://example.com"
-                className="h-12 rounded-xl border-border/80 bg-background/50 pl-11 text-base shadow-sm transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-14 md:text-[0.95rem]"
+                className="h-11 rounded-xl border-border/80 bg-background/50 pl-11 text-base shadow-sm transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-12 md:text-[0.95rem]"
               />
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
@@ -862,7 +858,7 @@ console.log(text)`
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Extract product title, price, description, images, SKU, and specifications..."
-              className="min-h-[140px] rounded-xl border-border/80 bg-background/50 text-base leading-relaxed shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 sm:min-h-[160px] md:min-h-[180px]"
+              className="min-h-[112px] rounded-xl border-border/80 bg-background/50 text-base leading-relaxed shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 sm:min-h-[128px] md:min-h-[144px]"
             />
             <p className="text-xs leading-relaxed text-muted-foreground">
               Describe what to capture; the model is instructed to answer with
@@ -878,83 +874,9 @@ console.log(text)`
             <p className="text-sm font-medium text-destructive">{formError}</p>
           ) : null}
 
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium dark:border-white/10",
-                    hermesStatus === "ok" &&
-                      "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
-                    hermesStatus === "error" &&
-                      "border-amber-500/35 bg-amber-500/10 text-amber-900 dark:text-amber-200",
-                    hermesStatus === "checking" &&
-                      "border-border/60 bg-background/50 text-muted-foreground"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      hermesStatus === "ok" &&
-                        "bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]",
-                      hermesStatus === "error" && "bg-amber-400",
-                      hermesStatus === "checking" &&
-                        "animate-pulse bg-muted-foreground/60"
-                    )}
-                  />
-                  Hermes:{" "}
-                  {hermesStatus === "checking"
-                    ? "checking…"
-                    : hermesStatus === "ok"
-                      ? "API reachable"
-                      : "API unreachable"}
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-2.5 py-1 text-xs font-medium dark:border-white/10">
-                  <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_oklch(0.75_0.15_160_/0.9)]" />
-                  Mode: normal
-                </span>
-                {hermesStatus === "error" ? (
-                  <button
-                    type="button"
-                    className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-primary hover:bg-primary/15"
-                    onClick={() => setOfflineModalOpen(true)}
-                  >
-                    Server help
-                  </button>
-                ) : null}
-                <span className="inline-flex items-center gap-1.5 text-xs">
-                  <Link2 className="size-3.5" aria-hidden />
-                  Depth scan · 5
-                </span>
-              </div>
-
-              {hermesHelp && hermesStatus !== "ok" ? (
-                <div className="w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
-                  <p className="font-semibold text-amber-900 dark:text-amber-50">
-                    Hermes connection help
-                  </p>
-                  <pre className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[0.8rem] opacity-95">
-                    {hermesHelp}
-                  </pre>
-                </div>
-              ) : null}
-            </div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 
             <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
-              <Button
-                variant="outline"
-                size="lg"
-                className="h-11 w-full rounded-xl border-border/80 sm:h-10 sm:w-auto"
-                onClick={handleGetCode}
-                disabled={getCodeBusy}
-              >
-                {getCodeBusy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Code2 className="size-4" />
-                )}
-                Get code
-              </Button>
               <motion.div
                 className="w-full sm:w-auto"
                 whileHover={reduceMotion ? undefined : { scale: 1.02 }}
@@ -1008,7 +930,7 @@ console.log(text)`
 
       {lastOutcome ? (
         <motion.div variants={item}>
-          <GlassPanel className="space-y-3 overflow-hidden p-5 sm:p-6">
+          <GlassPanel className="space-y-3 overflow-hidden p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1118,8 +1040,8 @@ console.log(text)`
         </motion.div>
       ) : null}
 
-      <motion.section variants={item} className="space-y-4 sm:space-y-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <motion.section variants={item} className="space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1 space-y-1">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Recent extractions

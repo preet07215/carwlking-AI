@@ -31,8 +31,8 @@ export function ExtractStreamProgress({
   if (!active && entries.length === 0 && !liveText) return null
 
   return (
-    <GlassPanel className="overflow-hidden p-4 sm:p-5">
-      <div className="mb-3 flex items-center gap-2">
+    <GlassPanel className="overflow-hidden p-3 sm:p-4">
+      <div className="mb-2 flex items-center gap-2">
         {active ? (
           <Loader2 className="size-4 animate-spin text-primary" aria-hidden />
         ) : (
@@ -59,12 +59,12 @@ export function ExtractStreamProgress({
         </span>
       </div>
 
-      <div className="grid min-h-0 gap-4 lg:grid-cols-2">
+      <div className="grid min-h-0 gap-3 lg:grid-cols-2">
         <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-background/40 dark:bg-black/25">
           <p className="border-b border-border/50 px-3 py-2 text-xs font-medium text-muted-foreground">
             Agent &amp; tool progress
           </p>
-          <ScrollArea className="h-[200px] min-h-0 shrink-0 sm:h-[240px]">
+          <ScrollArea className="h-[176px] min-h-0 shrink-0 sm:h-[208px]">
             <ul className="space-y-2 p-3">
               <AnimatePresence initial={false}>
                 {entries.length === 0 && active ? (
@@ -126,7 +126,7 @@ export function ExtractStreamProgress({
           </p>
           <div
             ref={modelTextScrollRef}
-            className="h-[200px] min-h-0 shrink-0 overflow-y-auto overscroll-contain sm:h-[240px]"
+            className="h-[176px] min-h-0 shrink-0 overflow-y-auto overscroll-contain sm:h-[208px]"
           >
             <pre
               className={cn(

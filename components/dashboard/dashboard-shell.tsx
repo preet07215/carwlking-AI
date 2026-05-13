@@ -80,7 +80,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           sidebarCollapsed={collapsed}
           onToggleSidebar={() => setCollapsed((c) => !c)}
         />
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-6 sm:px-4 sm:py-8 md:px-6 md:py-10 lg:px-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6 lg:px-8">
           <div className="mx-auto w-full max-w-5xl">{children}</div>
         </main>
       </div>

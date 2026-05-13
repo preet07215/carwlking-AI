@@ -99,7 +99,7 @@ export function FileUploadField({
         onDrop={handleDrop}
         tabIndex={disabled ? -1 : 0}
         className={cn(
-          "group relative flex min-h-[132px] cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border/80 bg-background/40 px-4 py-6 text-center shadow-sm outline-none transition-[border-color,box-shadow,background-color] duration-200 md:min-h-[148px]",
+          "group relative flex min-h-[104px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/80 bg-background/40 px-4 py-4 text-center shadow-sm outline-none transition-[border-color,box-shadow,background-color] duration-200 md:min-h-[118px]",
           "hover:border-primary/40 hover:bg-primary/[0.04]",
           "focus-visible:border-primary/50 focus-visible:ring-3 focus-visible:ring-primary/20",
           dragOver &&
@@ -148,8 +148,8 @@ export function FileUploadField({
           </>
         ) : (
           <>
-            <div className="flex size-12 items-center justify-center rounded-2xl border border-border/50 bg-muted/40 text-primary shadow-inner transition-transform duration-200 group-hover:scale-105 dark:bg-white/[0.06]">
-              <Upload className="size-6" />
+            <div className="flex size-10 items-center justify-center rounded-xl border border-border/50 bg-muted/40 text-primary shadow-inner transition-transform duration-200 group-hover:scale-105 dark:bg-white/[0.06]">
+              <Upload className="size-5" />
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">

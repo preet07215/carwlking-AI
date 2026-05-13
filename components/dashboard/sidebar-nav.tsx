@@ -94,7 +94,7 @@ export function SidebarNav({
           <div className="mt-auto rounded-xl border border-dashed border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground dark:border-white/10 dark:bg-white/[0.04]">
             <p className="font-medium text-foreground/90">Pro workspace</p>
             <p className="mt-1 leading-relaxed">
-              Fine-tuned models, SSO, and audit logs—coming soon.
+              Fine-tuned models, SSO, and audit logs coming soon.
             </p>
           </div>
         )}

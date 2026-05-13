@@ -22,7 +22,7 @@ export function TopBar({
 }: TopBarProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-border/50 bg-background/70 backdrop-blur-xl dark:border-white/10 dark:bg-background/55">
-      <div className="flex min-h-14 flex-col gap-3 px-3 py-3 sm:min-h-16 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3 md:px-6">
+      <div className="flex min-h-12 flex-col gap-2 px-3 py-2.5 sm:min-h-14 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-2.5 md:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <Button
             variant="ghost"
