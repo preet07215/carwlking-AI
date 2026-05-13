@@ -278,14 +278,10 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
                 className="h-12 rounded-xl border-border/80 bg-background/50 pl-11 text-base shadow-sm transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-14 md:text-[0.95rem]"
               />
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 py-1">
-            <Separator className="flex-1 bg-border/60 dark:bg-white/10" />
-            <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Or
-            </span>
-            <Separator className="flex-1 bg-border/60 dark:bg-white/10" />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Paste the live webpage URL to extract from. Headers and sample
+              payloads go in the optional upload below—not here.
+            </p>
           </div>
 
           <FileUploadField id="extraction-source-file" />

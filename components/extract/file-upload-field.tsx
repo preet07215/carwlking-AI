@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
 const DEFAULT_ACCEPT =
-  ".html,.htm,.txt,.md,.json,text/html,text/plain,application/json"
+  ".json,.txt,.har,.yaml,.yml,.csv,.md,application/json,text/plain,application/yaml,text/yaml"
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -68,12 +68,12 @@ export function FileUploadField({
         htmlFor={id}
         className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
       >
-        Source file (optional)
+        Headers / sample data (optional)
       </Label>
 
       <div
         role="button"
-        aria-label="Upload source file"
+        aria-label="Upload headers or sample data file"
         onClick={() => !disabled && inputRef.current?.click()}
         onKeyDown={(e) => {
           if (disabled) return
@@ -143,7 +143,7 @@ export function FileUploadField({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Tap to replace, or drop another file
+              Tap to replace with different headers or sample data
             </p>
           </>
         ) : (
@@ -153,11 +153,12 @@ export function FileUploadField({
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">
-                Drop a file here or click to browse
+                Headers, HAR, or sample JSON / text
               </p>
-              <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
-                HTML snapshot, saved page, notes, or JSON bundle — UI only, no
-                upload yet.
+              <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
+                Upload request headers, cookies, auth context, sample body, or a
+                HAR export. Keep the actual page address in Target URL above. UI
+                only—nothing is sent to a server yet.
               </p>
             </div>
           </>
