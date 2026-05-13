@@ -90,7 +90,7 @@ export function ExtractStreamProgress({
 
         <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-background/40 dark:bg-black/25">
           <p className="border-b border-border/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-            Model text
+            Model output
             {active ? (
               <span className="ml-2 inline-flex items-center gap-1 text-primary">
                 <span className="relative flex size-2">
@@ -102,24 +102,14 @@ export function ExtractStreamProgress({
             ) : null}
           </p>
           <ScrollArea className="h-[200px] min-h-0 shrink-0 sm:h-[240px]">
-            <div
+            <pre
               className={cn(
-                "p-3 text-sm leading-relaxed",
-                liveText
-                  ? "text-foreground/95"
-                  : "text-muted-foreground"
+                "whitespace-pre-wrap break-words p-3 font-mono text-xs leading-relaxed text-foreground/95 sm:text-sm",
+                !liveText && "text-muted-foreground"
               )}
             >
-              {liveText ? (
-                <p className="whitespace-pre-wrap break-words font-sans font-normal tracking-normal antialiased">
-                  {liveText}
-                </p>
-              ) : active ? (
-                <p>…</p>
-              ) : (
-                <p>—</p>
-              )}
-            </div>
+              {liveText || (active ? "…" : "—")}
+            </pre>
           </ScrollArea>
         </div>
       </div>

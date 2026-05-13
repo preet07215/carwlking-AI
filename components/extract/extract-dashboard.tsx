@@ -549,7 +549,6 @@ export function ExtractDashboard() {
           createdAt,
           resultText: errText,
         })
-        setStreamingText("")
         return
       }
 
@@ -567,7 +566,6 @@ export function ExtractDashboard() {
           createdAt,
           resultText: errText,
         })
-        setStreamingText("")
         return
       }
 
@@ -582,7 +580,6 @@ export function ExtractDashboard() {
 
       const durationMs = Date.now() - started
       setStreamActive(false)
-      setStreamingText("")
 
       setLastOutcome({
         ok: true,
@@ -621,7 +618,6 @@ export function ExtractDashboard() {
         createdAt,
         resultText: msg,
       })
-      setStreamingText("")
     } finally {
       setLoading(false)
     }
