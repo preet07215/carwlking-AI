@@ -32,10 +32,15 @@ import {
 import { FileUploadField } from "@/components/extract/file-upload-field"
 import { HermesServerOfflineDialog } from "@/components/extract/hermes-offline-dialog"
 import { ExtractStreamProgress } from "@/components/extract/extract-stream-panel"
+import { JsonTreeView } from "@/components/extract/json-tree-view"
 import {
   consumeChatCompletionSse,
   type StreamToolEntry,
 } from "@/lib/extract/sse-client"
+import {
+  jsonTextForDownload,
+  parseAssistantResponse,
+} from "@/lib/extract/split-json-response"
 
 async function fetchHermesHealthSignal(): Promise<{
   ok: boolean
@@ -80,23 +85,6 @@ function slugFromUrl(url: string): string {
   }
 }
 
-function prepareDownloadableJson(raw: string): string {
-  const t = raw.trim()
-  try {
-    return JSON.stringify(JSON.parse(t), null, 2)
-  } catch {
-    const m = /^```(?:json)?\s*([\s\S]*?)```/i.exec(t)
-    if (m) {
-      try {
-        return JSON.stringify(JSON.parse(m[1].trim()), null, 2)
-      } catch {
-        /* fall through */
-      }
-    }
-  }
-  return t
-}
-
 const container: Variants = {
   hidden: { opacity: 0 },
   show: {
@@ -129,7 +117,8 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
 
   function downloadRow(row: ExtractionRecord) {
     if (!row.resultText) return
-    const text = prepareDownloadableJson(row.resultText)
+    const text = jsonTextForDownload(row.resultText)
+    if (!text) return
     const blob = new Blob([text], { type: "application/json;charset=utf-8" })
     const a = document.createElement("a")
     a.href = URL.createObjectURL(blob)
@@ -209,7 +198,9 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
                   variant="ghost"
                   className="rounded-xl text-muted-foreground hover:text-foreground disabled:opacity-40"
                   aria-label="Download result"
-                  disabled={!row.resultText}
+                  disabled={
+                    !row.resultText || !jsonTextForDownload(row.resultText)
+                  }
                   onClick={() => downloadRow(row)}
                 >
                   <Download className="size-4" />
@@ -246,7 +237,9 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
                   variant="outline"
                   className="rounded-xl disabled:opacity-40"
                   aria-label="Download result"
-                  disabled={!row.resultText}
+                  disabled={
+                    !row.resultText || !jsonTextForDownload(row.resultText)
+                  }
                   onClick={() => downloadRow(row)}
                 >
                   <Download className="size-4" />
@@ -287,6 +280,11 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
   )
   const [streamingText, setStreamingText] = React.useState("")
   const [streamActive, setStreamActive] = React.useState(false)
+
+  const lastSplit = React.useMemo(() => {
+    if (!lastOutcome?.ok || !lastOutcome.content) return null
+    return parseAssistantResponse(lastOutcome.content)
+  }, [lastOutcome?.ok, lastOutcome?.content])
 
   const baseRecords = React.useMemo(
     () => (initialEmpty ? [] : mockExtractions),
@@ -553,12 +551,16 @@ console.log(text)`
 
   async function copyResult() {
     if (!lastOutcome?.ok || !lastOutcome.content) return
-    await navigator.clipboard.writeText(lastOutcome.content)
+    const jsonOnly = jsonTextForDownload(lastOutcome.content)
+    await navigator.clipboard.writeText(
+      jsonOnly ?? lastOutcome.content
+    )
   }
 
   function downloadLastResultJson() {
     if (!lastOutcome?.ok || !lastOutcome.content) return
-    const text = prepareDownloadableJson(lastOutcome.content)
+    const text = jsonTextForDownload(lastOutcome.content)
+    if (!text) return
     const blob = new Blob([text], { type: "application/json;charset=utf-8" })
     const a = document.createElement("a")
     a.href = URL.createObjectURL(blob)
@@ -809,10 +811,16 @@ console.log(text)`
                 </h3>
                 {lastOutcome.ok ? (
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    JSON response — copy or download as{" "}
-                    <code className="rounded bg-muted/60 px-1 py-px text-[0.8rem]">
-                      .json
-                    </code>
+                    JSON is shown in the tree view; anything outside the parsed
+                    value appears under{" "}
+                    <span className="font-medium text-foreground/85">
+                      Extra text
+                    </span>
+                    . Download includes{" "}
+                    <span className="font-medium text-foreground/85">
+                      JSON only
+                    </span>
+                    .
                   </p>
                 ) : null}
               </div>
@@ -831,7 +839,8 @@ console.log(text)`
                   <Button
                     type="button"
                     size="sm"
-                    className="gap-1.5 rounded-lg bg-gradient-to-r from-primary to-violet-600 text-primary-foreground shadow-md hover:opacity-95"
+                    className="gap-1.5 rounded-lg bg-gradient-to-r from-primary to-violet-600 text-primary-foreground shadow-md hover:opacity-95 disabled:opacity-40"
+                    disabled={!lastSplit?.prettyJson}
                     onClick={downloadLastResultJson}
                   >
                     <Download className="size-3.5" />
@@ -841,9 +850,53 @@ console.log(text)`
               ) : null}
             </div>
             {lastOutcome.ok ? (
-              <pre className="max-h-[min(360px,50vh)] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border/60 bg-background/80 p-4 font-mono text-xs leading-relaxed dark:bg-black/40 sm:text-sm">
-                {lastOutcome.content}
-              </pre>
+              <div className="space-y-5">
+                {lastSplit?.parsed != null ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      JSON
+                    </p>
+                    <JsonTreeView parsed={lastSplit.parsed} />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Response (no parseable JSON)
+                    </p>
+                    <pre className="max-h-[min(360px,50vh)] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border/60 bg-background/80 p-4 font-mono text-xs leading-relaxed dark:bg-black/40 sm:text-sm">
+                      {lastOutcome.content}
+                    </pre>
+                  </div>
+                )}
+                {lastSplit?.parsed != null &&
+                (lastSplit.extraBefore || lastSplit.extraAfter) ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Extra text
+                    </p>
+                    {lastSplit.extraBefore ? (
+                      <div className="space-y-1">
+                        <p className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                          Before JSON
+                        </p>
+                        <pre className="max-h-[min(200px,32vh)] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border/50 bg-muted/35 p-3 font-mono text-xs leading-relaxed text-foreground/90 dark:bg-black/25 sm:text-sm">
+                          {lastSplit.extraBefore}
+                        </pre>
+                      </div>
+                    ) : null}
+                    {lastSplit.extraAfter ? (
+                      <div className="space-y-1">
+                        <p className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                          After JSON
+                        </p>
+                        <pre className="max-h-[min(200px,32vh)] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border/50 bg-muted/35 p-3 font-mono text-xs leading-relaxed text-foreground/90 dark:bg-black/25 sm:text-sm">
+                          {lastSplit.extraAfter}
+                        </pre>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <pre className="max-h-[min(280px,40vh)] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-destructive/30 bg-destructive/5 p-4 font-mono text-xs text-destructive sm:text-sm">
                 {lastOutcome.error}
