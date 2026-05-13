@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: msg }, { status: 400 })
   }
 
-  const { targetUrl, prompt, headersSample, jsonSchema } = payload
+  const { targetUrl, prompt, headersSample } = payload
 
   const started = Date.now()
 
@@ -56,7 +56,6 @@ export async function POST(req: Request) {
       targetUrl,
       prompt,
       headersSample,
-      jsonSchema,
     })
     const raw = await hermesChatCompletion(chatPayload)
     const content = assistantContent(raw)

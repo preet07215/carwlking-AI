@@ -4,13 +4,8 @@ export function buildExtractionMessages(payload: {
   targetUrl: string
   prompt: string
   headersSample?: string
-  jsonSchema?: string
 }) {
-  const { jsonSchema, targetUrl, prompt, headersSample } = payload
-
-  const schemaBlock =
-    jsonSchema?.trim() ??
-    "(No JSON Schema provided — respond with clearly structured Markdown or JSON.)"
+  const { targetUrl, prompt, headersSample } = payload
 
   const headersBlock =
     headersSample?.trim() ??
@@ -19,9 +14,9 @@ export function buildExtractionMessages(payload: {
   const system = `You are an expert web data extraction assistant running in Hermes Agent.
 Rules:
 - Use your tools when needed to fetch and analyze the page at the given Target URL.
-- If you cannot access the URL, say so and summarize what would be needed (e.g. auth).
-- If a JSON Schema is provided, your FINAL reply MUST be a single valid JSON object matching that schema only — no markdown fences, no commentary before or after.
-- If no schema is provided, reply with well-structured Markdown or JSON as appropriate.
+- If you cannot access the URL, say so in JSON — use a single JSON object with keys like "error" and "detail" (no markdown, no prose outside JSON).
+- Your FINAL reply MUST be exactly one JSON value (usually an object) — valid JSON only: no markdown fences, no code blocks, no commentary before or after.
+- Choose property names and nesting so the result cleanly represents what the user asked to extract.
 - Treat optional headers/sample/HAR text as request context (cookies, auth, API shapes), not as the page URL.`
 
   const user = `## Target URL
@@ -33,8 +28,8 @@ ${prompt.trim()}
 ## Headers / sample / HAR context (optional)
 ${headersBlock}
 
-## Desired output shape (JSON Schema, optional)
-${schemaBlock}`
+## Output
+Return only JSON matching the extraction instructions above.`
 
   return [
     { role: "system" as const, content: system },
@@ -47,7 +42,6 @@ export function chatBodyForExtract(
     targetUrl: string
     prompt: string
     headersSample?: string
-    jsonSchema?: string
   },
   options?: { stream?: boolean }
 ) {

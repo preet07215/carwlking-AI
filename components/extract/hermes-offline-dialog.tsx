@@ -1,11 +1,9 @@
 "use client"
 
-import * as React from "react"
 import { Loader2, RefreshCw, ServerOff } from "lucide-react"
 
 import {
   AlertDialog,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -32,7 +30,12 @@ export function HermesServerOfflineDialog({
   retrying,
 }: HermesServerOfflineDialogProps) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) onOpenChange(true)
+      }}
+    >
       <AlertDialogContent className="max-w-md gap-4 border-border/80 shadow-2xl sm:max-w-lg">
         <AlertDialogHeader className="text-left sm:text-left">
           <AlertDialogMedia
@@ -45,7 +48,10 @@ export function HermesServerOfflineDialog({
           <AlertDialogTitle className="text-lg font-semibold tracking-tight">
             Hermes backend unavailable (503)
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-left">
+          <AlertDialogDescription
+            className="text-left"
+            render={<div />}
+          >
             <span className="mb-3 block text-foreground/90">
               Next.js is running, but it cannot reach the Hermes API at{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">
@@ -61,9 +67,6 @@ export function HermesServerOfflineDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="border-t-0 bg-transparent pt-0 sm:justify-end">
-          <AlertDialogCancel className="mt-0 rounded-xl sm:mt-0">
-            Continue in demo mode
-          </AlertDialogCancel>
           <Button
             type="button"
             className="rounded-xl bg-gradient-to-r from-primary to-violet-600 text-primary-foreground shadow-lg hover:opacity-95"

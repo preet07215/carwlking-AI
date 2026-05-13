@@ -7,8 +7,6 @@ import {
   type Variants,
 } from "framer-motion"
 import {
-  Braces,
-  ChevronDown,
   Code2,
   Copy,
   Download,
@@ -20,11 +18,6 @@ import {
 import { GlassPanel } from "@/components/ui/glass-panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -75,18 +68,34 @@ async function fetchHermesHealthSignal(): Promise<{
   }
 }
 
-const schemaPlaceholder = `{
-  "type": "object",
-  "properties": {
-    "title": { "type": "string" },
-    "price": { "type": "number" },
-    "images": {
-      "type": "array",
-      "items": { "type": "string", "format": "uri" }
+function slugFromUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    const s = u.hostname
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "")
+    return s.slice(0, 48) || "extraction"
+  } catch {
+    return "extraction"
+  }
+}
+
+function prepareDownloadableJson(raw: string): string {
+  const t = raw.trim()
+  try {
+    return JSON.stringify(JSON.parse(t), null, 2)
+  } catch {
+    const m = /^```(?:json)?\s*([\s\S]*?)```/i.exec(t)
+    if (m) {
+      try {
+        return JSON.stringify(JSON.parse(m[1].trim()), null, 2)
+      } catch {
+        /* fall through */
+      }
     }
-  },
-  "required": ["title", "price"]
-}`
+  }
+  return t
+}
 
 const container: Variants = {
   hidden: { opacity: 0 },
@@ -120,10 +129,11 @@ function RecentExtractions({ records }: { records: ExtractionRecord[] }) {
 
   function downloadRow(row: ExtractionRecord) {
     if (!row.resultText) return
-    const blob = new Blob([row.resultText], { type: "text/plain;charset=utf-8" })
+    const text = prepareDownloadableJson(row.resultText)
+    const blob = new Blob([text], { type: "application/json;charset=utf-8" })
     const a = document.createElement("a")
     a.href = URL.createObjectURL(blob)
-    a.download = `extraction-${row.id.slice(0, 8)}.txt`
+    a.download = `extraction-${slugFromUrl(row.url)}-${row.id.slice(0, 8)}.json`
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -258,8 +268,6 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
   const [liveRuns, setLiveRuns] = React.useState<ExtractionRecord[]>([])
   const [loading, setLoading] = React.useState(false)
   const [getCodeBusy, setGetCodeBusy] = React.useState(false)
-  const [schemaOpen, setSchemaOpen] = React.useState(false)
-  const [schemaText, setSchemaText] = React.useState(schemaPlaceholder)
   const [hermesStatus, setHermesStatus] = React.useState<
     "checking" | "ok" | "error"
   >("checking")
@@ -272,6 +280,7 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
     content?: string
     error?: string
     durationMs?: number
+    sourceUrl?: string
   } | null>(null)
   const [streamEntries, setStreamEntries] = React.useState<StreamToolEntry[]>(
     []
@@ -364,7 +373,6 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
           targetUrl: u,
           prompt: p,
           headersSample: headersSample || undefined,
-          jsonSchema: schemaText.trim() || undefined,
         }),
       })
 
@@ -458,6 +466,7 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
         ok: true,
         content: acc,
         durationMs,
+        sourceUrl: u,
       })
       setLiveRuns((prev) => [
         {
@@ -499,7 +508,6 @@ export function ExtractDashboard({ initialEmpty }: { initialEmpty?: boolean }) {
           prompt.trim() ||
           "Extract the main product title and price as JSON.",
         headersSample: "// optional: paste HAR / headers text",
-        jsonSchema: schemaText.trim() || undefined,
       }
       const origin =
         typeof window !== "undefined" ? window.location.origin : ""
@@ -548,6 +556,18 @@ console.log(text)`
     await navigator.clipboard.writeText(lastOutcome.content)
   }
 
+  function downloadLastResultJson() {
+    if (!lastOutcome?.ok || !lastOutcome.content) return
+    const text = prepareDownloadableJson(lastOutcome.content)
+    const blob = new Blob([text], { type: "application/json;charset=utf-8" })
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    const slug = slugFromUrl(lastOutcome.sourceUrl ?? targetUrl)
+    a.download = `extraction-${slug}-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   return (
     <motion.div
       variants={container}
@@ -584,7 +604,12 @@ console.log(text)`
             Extract
           </h2>
           <p className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Extract structured data from any webpage using AI.
+            Extract structured data from any webpage. The assistant always
+            replies with JSON; save it from the result panel as a{" "}
+            <code className="rounded-md bg-muted/80 px-1.5 py-0.5 text-[0.9em]">
+              .json
+            </code>{" "}
+            file.
           </p>
         </div>
       </motion.header>
@@ -633,54 +658,13 @@ console.log(text)`
               placeholder="Extract product title, price, description, images, SKU, and specifications..."
               className="min-h-[140px] rounded-xl border-border/80 bg-background/50 text-base leading-relaxed shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 sm:min-h-[160px] md:min-h-[180px]"
             />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Describe what to capture; the model is instructed to answer with
+              valid JSON only (no markdown fences). After a run, use{" "}
+              <span className="font-medium text-foreground/85">Download JSON</span>{" "}
+              to save the response.
+            </p>
           </div>
-
-          <Collapsible
-            open={schemaOpen}
-            onOpenChange={setSchemaOpen}
-            className="rounded-2xl border border-border/70 bg-muted/25 dark:border-white/10 dark:bg-white/[0.04]"
-          >
-            <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 dark:hover:bg-white/[0.06] sm:px-5">
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <Braces className="size-4 text-primary" />
-                Output format (JSON Schema optional)
-              </span>
-              <ChevronDown
-                className={cn(
-                  "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                  schemaOpen && "rotate-180"
-                )}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-2 border-t border-border/60 px-4 pb-4 pt-3 dark:border-white/10 sm:px-5 sm:pb-5">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <Label
-                  htmlFor="output-schema"
-                  className="text-xs font-normal text-muted-foreground"
-                >
-                  Edit JSON Schema — the model is instructed to match it when
-                  present.
-                </Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="h-7 shrink-0 rounded-lg text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setSchemaText(schemaPlaceholder)}
-                >
-                  Reset example
-                </Button>
-              </div>
-              <Textarea
-                id="output-schema"
-                value={schemaText}
-                onChange={(e) => setSchemaText(e.target.value)}
-                spellCheck={false}
-                className="min-h-[200px] max-h-[min(420px,55vh)] w-full resize-y rounded-xl border-border/60 bg-background/80 font-mono text-xs leading-relaxed shadow-inner focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:border-white/10 dark:bg-black/40 sm:text-sm"
-                aria-label="JSON Schema output format"
-              />
-            </CollapsibleContent>
-          </Collapsible>
 
           <Separator className="bg-border/60 dark:bg-white/10" />
 
@@ -819,20 +803,41 @@ console.log(text)`
         <motion.div variants={item}>
           <GlassPanel className="space-y-3 p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Last result
-              </h3>
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                  Last result
+                </h3>
+                {lastOutcome.ok ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    JSON response — copy or download as{" "}
+                    <code className="rounded bg-muted/60 px-1 py-px text-[0.8rem]">
+                      .json
+                    </code>
+                  </p>
+                ) : null}
+              </div>
               {lastOutcome.ok && lastOutcome.content ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 rounded-lg"
-                  onClick={() => void copyResult()}
-                >
-                  <Copy className="size-3.5" />
-                  Copy
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 rounded-lg"
+                    onClick={() => void copyResult()}
+                  >
+                    <Copy className="size-3.5" />
+                    Copy
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-1.5 rounded-lg bg-gradient-to-r from-primary to-violet-600 text-primary-foreground shadow-md hover:opacity-95"
+                    onClick={downloadLastResultJson}
+                  >
+                    <Download className="size-3.5" />
+                    Download JSON
+                  </Button>
+                </div>
               ) : null}
             </div>
             {lastOutcome.ok ? (

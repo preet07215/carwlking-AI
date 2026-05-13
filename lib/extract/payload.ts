@@ -2,7 +2,6 @@ export type ExtractPayload = {
   targetUrl: string
   prompt: string
   headersSample?: string
-  jsonSchema?: string
 }
 
 export function parseExtractJson(body: unknown): ExtractPayload {
@@ -14,10 +13,9 @@ export function parseExtractJson(body: unknown): ExtractPayload {
   const prompt = typeof b.prompt === "string" ? b.prompt.trim() : ""
   const headersSample =
     typeof b.headersSample === "string" ? b.headersSample : undefined
-  const jsonSchema = typeof b.jsonSchema === "string" ? b.jsonSchema : undefined
 
   if (!targetUrl) throw new Error("targetUrl is required")
   if (!prompt) throw new Error("prompt is required")
 
-  return { targetUrl, prompt, headersSample, jsonSchema }
+  return { targetUrl, prompt, headersSample }
 }
