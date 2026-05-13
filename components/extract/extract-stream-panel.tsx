@@ -50,12 +50,6 @@ export function ExtractStreamProgress({
               </code>
             </span>
           ) : null}
-          <span>
-            Hermes{" "}
-            <code className="rounded bg-muted/60 px-1 py-0.5">
-              stream: true
-            </code>
-          </span>
         </span>
       </div>
 

@@ -803,13 +803,13 @@ console.log(text)`
         </div>
         <div className="space-y-2">
           
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-[2.75rem] lg:leading-[1.1]">
+          <h3 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-[2.75rem] lg:leading-[1.1]">
             Extract
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-black/20">
+              {/* <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-black/20">
               <Sparkles className="size-3.5 text-primary ml-2" />
                 AI extraction studio
-              </div>
-          </h2>
+              </div> */}
+          </h3>
           <p className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
             Extract structured data from any webpage.
           </p>
