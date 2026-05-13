@@ -148,8 +148,7 @@ function RecentExtractions({
               No extractions yet
             </h3>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Run an extraction above. Rows appear here for this session; turn
-              on Supabase to keep history across visits.
+              Run an extraction above. Rows appear here for this session.
             </p>
           </div>
         </div>
@@ -1050,13 +1049,6 @@ console.log(text)`
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Recent extractions
             </h3>
-            <p className="text-sm text-muted-foreground">
-              {historyConfigured
-                ? saveHistory
-                  ? "Session list merged with rows saved in Supabase (up to 100)."
-                  : "Session only — nothing is written to the database."
-                : "Add Supabase URL + service role key and run the SQL migration to enable saved history."}
-            </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div className="flex items-center gap-2.5">
@@ -1091,7 +1083,7 @@ console.log(text)`
                 htmlFor="save-extraction-history"
                 className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-60"
               >
-                Save history (Supabase)
+                Save history 
               </Label>
             </div>
             {historyConfigured && saveHistory ? (

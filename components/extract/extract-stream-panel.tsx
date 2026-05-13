@@ -97,38 +97,27 @@ export function ExtractStreamProgress({
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-40" />
                   <span className="relative inline-flex size-2 rounded-full bg-primary" />
                 </span>
-                in progress
+                streaming
               </span>
             ) : null}
           </p>
           <ScrollArea className="h-[200px] min-h-0 shrink-0 sm:h-[240px]">
             <div
               className={cn(
-                "p-3 text-sm leading-relaxed text-foreground/95",
-                active && "text-muted-foreground"
+                "p-3 text-sm leading-relaxed",
+                liveText
+                  ? "text-foreground/95"
+                  : "text-muted-foreground"
               )}
             >
-              {active ? (
-                <div className="space-y-2">
-                  <p>
-                    The model is still writing. This area stays as plain text
-                    only — no raw stream is shown here. Open{" "}
-                    <span className="font-medium text-foreground/90">
-                      Last result
-                    </span>{" "}
-                    below for the full reply (tree + download).
-                  </p>
-                  {liveText.length > 0 ? (
-                    <p className="text-xs tabular-nums text-muted-foreground">
-                      {liveText.length.toLocaleString()} characters received so
-                      far
-                    </p>
-                  ) : null}
-                </div>
-              ) : liveText ? (
-                <p className="whitespace-pre-wrap break-words">{liveText}</p>
+              {liveText ? (
+                <p className="whitespace-pre-wrap break-words font-sans font-normal tracking-normal antialiased">
+                  {liveText}
+                </p>
+              ) : active ? (
+                <p>…</p>
               ) : (
-                <p className="text-muted-foreground">—</p>
+                <p>—</p>
               )}
             </div>
           </ScrollArea>

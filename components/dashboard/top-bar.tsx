@@ -59,19 +59,6 @@ export function TopBar({
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-          <a
-            href="#"
-            className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground lg:inline"
-            onClick={(e) => e.preventDefault()}
-          >
-            Book a call
-          </a>
-          <Button
-            size="sm"
-            className="h-8 rounded-lg bg-gradient-to-r from-primary to-fuchsia-500 px-3 text-primary-foreground shadow-[0_4px_20px_-4px_oklch(0.45_0.25_285_/0.55)] transition-all hover:brightness-110 active:translate-y-px"
-          >
-            Upgrade
-          </Button>
           <ThemeToggle />
         </div>
       </div>
