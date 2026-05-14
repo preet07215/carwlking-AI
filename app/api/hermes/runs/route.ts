@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { HermesUpstreamError, hermesPostJson } from "@/lib/hermes/client"
 
 /**
- * Proxy POST /v1/runs — Hermes runs API (see Hermes docs).
+ * Forward POST /v1/runs — Hermes runs API (see Hermes docs).
  */
 export async function POST(req: Request) {
   let body: unknown

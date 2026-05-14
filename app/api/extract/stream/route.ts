@@ -9,7 +9,7 @@ import {
 import { chatBodyForExtract } from "@/lib/hermes/extract-messages"
 
 /**
- * Proxies Hermes chat.completions with stream: true (SSE).
+ * Forwards to Hermes chat.completions with stream: true (SSE).
  * Client uses fetch + ReadableStream (POST body required).
  */
 export const dynamic = "force-dynamic"

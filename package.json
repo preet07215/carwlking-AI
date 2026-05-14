@@ -6,8 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint",
-    "hermes:proxy-env": "node scripts/print-hermes-oxylabs-env.mjs"
+    "lint": "eslint"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
