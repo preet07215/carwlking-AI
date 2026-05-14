@@ -23,7 +23,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import {
@@ -318,7 +317,6 @@ export function ExtractDashboard() {
     []
   )
   const [historyConfigured, setHistoryConfigured] = React.useState(false)
-  const [saveHistory, setSaveHistory] = React.useState(true)
   const [historyClearing, setHistoryClearing] = React.useState(false)
   const [removeBusyId, setRemoveBusyId] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
@@ -375,7 +373,7 @@ export function ExtractDashboard() {
   }, [lastOutcome?.ok, lastOutcome?.content])
 
   const displayRecords = React.useMemo(() => {
-    if (!saveHistory || !historyConfigured) {
+    if (!historyConfigured) {
       return [...liveRuns].sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -388,12 +386,11 @@ export function ExtractDashboard() {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
-  }, [liveRuns, storedHistory, saveHistory, historyConfigured])
+  }, [liveRuns, storedHistory, historyConfigured])
 
   const reduceMotion = useReducedMotion()
 
   async function persistExtraction(record: ExtractionRecord) {
-    if (!saveHistory || !historyConfigured) return
     try {
       const r = await fetch("/api/history", {
         method: "POST",
@@ -404,6 +401,7 @@ export function ExtractDashboard() {
       const j = (await r.json()) as { item?: ExtractionRecord }
       if (j.item) {
         const saved = j.item
+        setHistoryConfigured(true)
         setStoredHistory((prev) => [
           saved,
           ...prev.filter((x) => x.id !== saved.id),
@@ -425,21 +423,20 @@ export function ExtractDashboard() {
   async function removeRecord(id: string) {
     setRemoveBusyId(id)
     try {
-      if (saveHistory && historyConfigured) {
-        const r = await fetch(`/api/history/${encodeURIComponent(id)}`, {
-          method: "DELETE",
-        })
-        if (!r.ok) return
+      const r = await fetch(`/api/history/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      })
+      if (r.ok || r.status === 503) {
+        setStoredHistory((prev) => prev.filter((x) => x.id !== id))
+        setLiveRuns((prev) => prev.filter((x) => x.id !== id))
       }
-      setStoredHistory((prev) => prev.filter((x) => x.id !== id))
-      setLiveRuns((prev) => prev.filter((x) => x.id !== id))
     } finally {
       setRemoveBusyId(null)
     }
   }
 
   async function clearCloudHistory() {
-    if (!historyConfigured || !saveHistory) return
+    if (!historyConfigured) return
     if (
       !window.confirm(
         "Remove all extractions stored in Supabase? This cannot be undone."
@@ -459,14 +456,6 @@ export function ExtractDashboard() {
   React.useEffect(() => {
     let cancelled = false
     ;(async () => {
-      let preferSave = true
-      try {
-        preferSave = localStorage.getItem("extraction-save-history") !== "0"
-      } catch {
-        /* ignore */
-      }
-      setSaveHistory(preferSave)
-
       const r = await fetch("/api/history")
       const j = (await r.json().catch(() => ({
         configured: false,
@@ -474,7 +463,7 @@ export function ExtractDashboard() {
       }))) as { configured?: boolean; items?: ExtractionRecord[] }
       if (cancelled) return
       setHistoryConfigured(Boolean(j.configured))
-      if (preferSave && j.configured && Array.isArray(j.items)) {
+      if (j.configured && Array.isArray(j.items)) {
         setStoredHistory(j.items)
       }
     })()
@@ -1047,43 +1036,8 @@ console.log(text)`
               Recent extractions
             </h3>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <div className="flex items-center gap-2.5">
-              <Switch
-                id="save-extraction-history"
-                checked={saveHistory}
-                disabled={!historyConfigured}
-                onCheckedChange={(checked) => {
-                  setSaveHistory(checked)
-                  try {
-                    localStorage.setItem(
-                      "extraction-save-history",
-                      checked ? "1" : "0"
-                    )
-                  } catch {
-                    /* ignore */
-                  }
-                  if (!checked) {
-                    setStoredHistory([])
-                  } else {
-                    void (async () => {
-                      const r = await fetch("/api/history")
-                      const j = (await r.json().catch(() => ({
-                        items: [],
-                      }))) as { items?: ExtractionRecord[] }
-                      if (Array.isArray(j.items)) setStoredHistory(j.items)
-                    })()
-                  }
-                }}
-              />
-              <Label
-                htmlFor="save-extraction-history"
-                className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-60"
-              >
-                Save history 
-              </Label>
-            </div>
-            {historyConfigured && saveHistory ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 sm:justify-end">
+            {historyConfigured ? (
               <Button
                 type="button"
                 variant="outline"
