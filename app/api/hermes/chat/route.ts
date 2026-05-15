@@ -4,6 +4,7 @@ import {
   HermesUpstreamError,
   hermesChatCompletion,
 } from "@/lib/hermes/client"
+import { getHermesServerConfig } from "@/lib/hermes/config"
 
 /**
  * Passthrough to Hermes POST /v1/chat/completions (non-streaming).
@@ -29,9 +30,15 @@ export async function POST(req: Request) {
     )
   }
 
+  const { model: envModel } = getHermesServerConfig()
+  const requested =
+    typeof b.model === "string" && b.model.trim() ? b.model.trim() : ""
+  const selectedModel = requested || envModel
+
   const payload = {
     ...b,
-    stream: false,
+    model: selectedModel,
+    stream: false as const,
   }
 
   try {

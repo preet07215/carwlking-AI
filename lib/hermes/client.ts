@@ -28,14 +28,11 @@ async function hermesAuthFetch(
   }
 ): Promise<Response> {
   const { apiV1, origin, apiKey } = getHermesServerConfig()
-  const p = path.startsWith("/") ? path : `/${path}`
   const url = path.startsWith("http")
     ? path
-    : p.startsWith("/v1/") || p.startsWith("/api/")
-      ? `${origin}${p}`
-      : p.startsWith("/health")
-        ? `${origin}${p}`
-        : `${apiV1}${p}`
+    : path.startsWith("/v1/")
+      ? `${origin}${path}`
+      : `${apiV1}${path.startsWith("/") ? path : `/${path}`}`
 
   const headers = new Headers(init?.headers)
   headers.set("Authorization", `Bearer ${apiKey}`)
@@ -163,59 +160,4 @@ export async function hermesPostJson(
   } catch {
     throw new HermesUpstreamError("Invalid JSON from Hermes", res.status, text)
   }
-}
-
-export async function hermesGetJson(path: string): Promise<unknown> {
-  const res = await hermesAuthFetch(path, {
-    method: "GET",
-    skipJsonContentType: true,
-  })
-  const text = await res.text()
-  if (!res.ok) {
-    throw new HermesUpstreamError(`GET ${path} failed`, res.status, text)
-  }
-  try {
-    return text ? (JSON.parse(text) as unknown) : null
-  } catch {
-    throw new HermesUpstreamError("Invalid JSON from Hermes", res.status, text)
-  }
-}
-
-export async function hermesPatchJson(
-  path: string,
-  body: Record<string, unknown>
-): Promise<unknown> {
-  const res = await hermesAuthFetch(path, {
-    method: "PATCH",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(body),
-  })
-  const text = await res.text()
-  if (!res.ok) {
-    throw new HermesUpstreamError(`PATCH ${path} failed`, res.status, text)
-  }
-  try {
-    return text ? (JSON.parse(text) as unknown) : {}
-  } catch {
-    throw new HermesUpstreamError("Invalid JSON from Hermes", res.status, text)
-  }
-}
-
-export async function hermesDelete(path: string): Promise<unknown> {
-  const res = await hermesAuthFetch(path, { method: "DELETE" })
-  const text = await res.text()
-  if (!res.ok) {
-    throw new HermesUpstreamError(`DELETE ${path} failed`, res.status, text)
-  }
-  if (!text.trim()) return {}
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    return { raw: text }
-  }
-}
-
-/** POST `{}` for Hermes jobs pause / resume / run now. */
-export async function hermesPostEmpty(path: string): Promise<unknown> {
-  return hermesPostJson(path, {})
 }

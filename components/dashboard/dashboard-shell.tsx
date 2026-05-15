@@ -27,10 +27,6 @@ const titles: Record<string, { title: string; subtitle?: string }> = {
     title: "Hermes skills",
     subtitle: "Create, edit, and remove agent skill definitions.",
   },
-  "/jobs": {
-    title: "Hermes jobs",
-    subtitle: "List, create, and control background jobs on the Hermes API server.",
-  },
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -40,11 +36,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const meta =
     titles[pathname] ??
-    (pathname.startsWith("/skills")
-      ? titles["/skills"]
-      : pathname.startsWith("/jobs")
-        ? titles["/jobs"]
-        : titles["/"])
+    (pathname.startsWith("/skills") ? titles["/skills"] : titles["/"])
 
   return (
     <div className="relative flex h-dvh max-h-dvh w-full max-w-[100vw] overflow-hidden">

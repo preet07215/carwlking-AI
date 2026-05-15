@@ -373,6 +373,7 @@ export function ExtractDashboard() {
     {
       id: string
       name: string
+      source?: "hermes" | "openrouter"
       pricingSummary?: string | null
     }[]
   >([])
@@ -383,6 +384,7 @@ export function ExtractDashboard() {
   const [modelMenuOpen, setModelMenuOpen] = React.useState(false)
   const [modelSearch, setModelSearch] = React.useState("")
   const modelPickerRef = React.useRef<HTMLDivElement | null>(null)
+  const catalogDefaultModelRef = React.useRef<string>("")
   const [useWebUnblockerProxy, setUseWebUnblockerProxy] = React.useState(false)
   const [liveRuns, setLiveRuns] = React.useState<ExtractionRecord[]>([])
   const [storedHistory, setStoredHistory] = React.useState<ExtractionRecord[]>(
@@ -454,7 +456,8 @@ export function ExtractDashboard() {
       (m) =>
         m.id.toLowerCase().includes(q) ||
         m.name.toLowerCase().includes(q) ||
-        (m.pricingSummary?.toLowerCase().includes(q) ?? false)
+        (m.pricingSummary?.toLowerCase().includes(q) ?? false) ||
+        (m.source?.toLowerCase().includes(q) ?? false)
     )
   }, [catalogModels, modelSearch])
 
@@ -485,41 +488,54 @@ export function ExtractDashboard() {
     let cancelled = false
     void (async () => {
       try {
-        const r = await fetch("/api/openrouter/models")
+        const r = await fetch("/api/extraction/catalog-models")
         const j = (await r.json()) as {
           ok?: boolean
           models?: {
             id: string
             name: string
+            source?: "hermes" | "openrouter"
             pricingSummary?: string | null
           }[]
           defaultModel?: string
-          error?: string
-          detail?: string
+          hints?: { hermesError?: string | null; openrouterError?: string | null }
         }
         if (cancelled) return
 
         const models = Array.isArray(j.models) ? j.models : []
         setCatalogModels(models)
 
+        const def = j.defaultModel ?? models[0]?.id ?? ""
+        catalogDefaultModelRef.current = def
+
+        const partialWarns = [
+          j.hints?.hermesError
+            ? `Hermes catalog: ${j.hints.hermesError}`
+            : null,
+          j.hints?.openrouterError
+            ? `OpenRouter catalog: ${j.hints.openrouterError}`
+            : null,
+        ].filter(Boolean)
+
         if (!r.ok || j.ok === false) {
-          const hint = [j.error, j.detail].filter(Boolean).join(" — ")
           setCatalogModelsHint(
-            hint ||
-              "Could not load OpenRouter models. Check network or set OPENROUTER_API_KEY; you can still type a model id manually."
+            partialWarns.join(" — ") ||
+              "Could not load full model catalog. Type a model id manually or check Hermes gateway and OpenRouter."
           )
+        } else if (partialWarns.length > 0) {
+          setCatalogModelsHint(partialWarns.join(" — "))
         } else {
           setCatalogModelsHint(null)
         }
 
         setChatModelId((prev) => {
           if (prev.trim()) return prev
-          return j.defaultModel ?? models[0]?.id ?? ""
+          return def
         })
       } catch (e) {
         if (!cancelled) {
           setCatalogModelsHint(
-            e instanceof Error ? e.message : "Failed to load OpenRouter models."
+            e instanceof Error ? e.message : "Failed to load model catalog."
           )
           setCatalogModels([])
         }
@@ -704,11 +720,13 @@ export function ExtractDashboard() {
     const started = Date.now()
     const id = crypto.randomUUID()
     const createdAt = new Date().toISOString()
-    const modelIdForRun = chatModelId.trim() || undefined
+    const resolvedModel =
+      chatModelId.trim() || catalogDefaultModelRef.current.trim()
+    const modelIdForRun = resolvedModel || undefined
     const useProxyForRun = useWebUnblockerProxy
     const pricingForRun =
-      catalogModels.find((m) => m.id === (chatModelId.trim() || ""))
-        ?.pricingSummary ?? undefined
+      catalogModels.find((m) => m.id === resolvedModel)?.pricingSummary ??
+      undefined
 
     setStreamEntries([
       {
@@ -748,7 +766,7 @@ export function ExtractDashboard() {
           targetUrl: u,
           prompt: p,
           headersSample: headersSample || undefined,
-          ...(chatModelId.trim() ? { model: chatModelId.trim() } : {}),
+          ...(resolvedModel ? { model: resolvedModel } : {}),
           useProxy: useWebUnblockerProxy,
         }),
       })
@@ -980,13 +998,15 @@ export function ExtractDashboard() {
   async function handleGetCode() {
     setGetCodeBusy(true)
     try {
+      const resolvedExampleModel =
+        chatModelId.trim() || catalogDefaultModelRef.current.trim()
       const example = {
         targetUrl: targetUrl.trim() || "https://example.com",
         prompt:
           prompt.trim() ||
           "Extract the main product title and price as JSON.",
         headersSample: "// optional: paste HAR / headers text",
-        model: chatModelId.trim() || "your-model-id",
+        model: resolvedExampleModel || "your-model-id",
         useProxy: false,
       }
       const origin =
@@ -1131,7 +1151,7 @@ console.log(text)`
               }
               className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
-              Model (OpenRouter)
+              Model (Hermes + OpenRouter)
             </Label>
             {catalogModels.length > 0 ? (
               <div ref={modelPickerRef} className="relative">
@@ -1209,8 +1229,23 @@ console.log(text)`
                                 m.id === chatModelId && "bg-muted/60"
                               )}
                             >
-                              <span className="truncate font-medium">
-                                {m.name}
+                              <span className="flex flex-wrap items-center gap-2">
+                                {m.source ? (
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "h-5 shrink-0 rounded-md px-1.5 py-0 text-[0.6rem] font-normal uppercase tracking-wide",
+                                      m.source === "hermes"
+                                        ? "border-violet-500/30 bg-violet-500/10 text-violet-800 dark:text-violet-200"
+                                        : "border-sky-500/30 bg-sky-500/10 text-sky-900 dark:text-sky-200"
+                                    )}
+                                  >
+                                    {m.source}
+                                  </Badge>
+                                ) : null}
+                                <span className="truncate font-medium">
+                                  {m.name}
+                                </span>
                               </span>
                               <span className="truncate font-mono text-xs text-muted-foreground">
                                 {m.id}
@@ -1233,7 +1268,7 @@ console.log(text)`
                 id="chat-model"
                 value={chatModelId}
                 onChange={(e) => setChatModelId(e.target.value)}
-                placeholder="e.g. anthropic/claude-opus-4.7-fast"
+                placeholder="Model id (Hermes /v1/models or OpenRouter id)"
                 className="h-11 rounded-xl border-border/80 bg-background/50 text-base shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-12 md:text-[0.95rem]"
               />
             )}
@@ -1243,17 +1278,20 @@ console.log(text)`
               </p>
             ) : (
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Model{" "}
-                <code className="rounded bg-muted/50 px-1">id</code> from{" "}
+                Dropdown lists{" "}
+                <span className="font-medium text-foreground/85">Hermes</span>{" "}
+                ids from{" "}
+                <code className="rounded bg-muted/50 px-1">GET /v1/models</code>{" "}
+                first, then{" "}
                 <a
                   href="https://openrouter.ai/api/v1/models"
                   target="_blank"
                   rel="noreferrer"
                   className="font-medium text-primary underline-offset-4 hover:underline"
                 >
-                  OpenRouter models
-                </a>
-                , passed as{" "}
+                  OpenRouter
+                </a>{" "}
+                (deduped). The chosen <code className="rounded bg-muted/50 px-1">id</code> is always sent as{" "}
                 <code className="rounded bg-muted/50 px-1">model</code> on{" "}
                 <a
                   href="https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server"
@@ -1265,18 +1303,15 @@ console.log(text)`
                 </a>{" "}
                 <code className="rounded bg-muted/50 px-1">
                   POST /v1/chat/completions
-                </code>{" "}
-                (same shape as the curl hello example). Pricing shown is list price
-                from OpenRouter (USD per M tokens, derived from API fields). Default
-                id:{" "}
-                <code className="rounded bg-muted/50 px-1">
-                  anthropic/claude-opus-4.7-fast
-                </code>{" "}
-                when present; override with env{" "}
+                </code>
+                . If none is selected, the server uses{" "}
+                <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>{" "}
+                (<code className="rounded bg-muted/50 px-1">hermes-agent</code> by
+                default). Set{" "}
                 <code className="rounded bg-muted/50 px-1">
                   OPENROUTER_DEFAULT_MODEL
-                </code>
-                .
+                </code>{" "}
+                to prefer an OpenRouter id when it&apos;s in the merged list.
               </p>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground/90">
