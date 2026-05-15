@@ -9,6 +9,7 @@ export type ExtractionHistoryRow = {
   prompt: string | null
   model_id: string | null
   use_proxy: boolean | null
+  pricing_summary: string | null
   result_text: string | null
 }
 
@@ -30,6 +31,7 @@ export function dbRowToRecord(row: ExtractionHistoryRow): ExtractionRecord {
     prompt: row.prompt ?? undefined,
     modelId: row.model_id ?? undefined,
     useProxy: row.use_proxy === true,
+    pricingSummary: row.pricing_summary ?? undefined,
     resultText: row.result_text ?? undefined,
   }
 }
@@ -44,6 +46,7 @@ export function recordToDbRow(r: ExtractionRecord): ExtractionHistoryRow {
     prompt: r.prompt ?? null,
     model_id: r.modelId?.trim() || null,
     use_proxy: r.useProxy === true,
+    pricing_summary: r.pricingSummary?.trim() || null,
     result_text: r.resultText ?? null,
   }
 }

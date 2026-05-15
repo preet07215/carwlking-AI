@@ -212,7 +212,7 @@ function RecentExtractions({
                     {promptPreview}
                   </p>
                 ) : null}
-                {row.modelId || row.useProxy ? (
+                {row.modelId || row.useProxy || row.pricingSummary ? (
                   <p className="mt-0.5 flex flex-wrap items-center gap-2">
                     {row.modelId ? (
                       <code className="max-w-full truncate rounded bg-muted/60 px-1 py-0.5 font-mono text-[0.65rem] text-muted-foreground">
@@ -226,6 +226,11 @@ function RecentExtractions({
                       >
                         Proxy
                       </Badge>
+                    ) : null}
+                    {row.pricingSummary ? (
+                      <span className="max-w-full text-[0.65rem] leading-snug text-muted-foreground tabular-nums">
+                        {row.pricingSummary}
+                      </span>
                     ) : null}
                   </p>
                 ) : null}
@@ -303,7 +308,7 @@ function RecentExtractions({
                   {promptPreview}
                 </p>
               ) : null}
-              {row.modelId || row.useProxy ? (
+              {row.modelId || row.useProxy || row.pricingSummary ? (
                 <div className="flex flex-wrap items-center gap-2">
                   {row.modelId ? (
                     <code className="max-w-full truncate rounded bg-muted/60 px-1 py-0.5 font-mono text-[0.65rem] text-muted-foreground">
@@ -317,6 +322,11 @@ function RecentExtractions({
                     >
                       Proxy
                     </Badge>
+                  ) : null}
+                  {row.pricingSummary ? (
+                    <span className="max-w-full text-[0.65rem] leading-snug text-muted-foreground tabular-nums">
+                      {row.pricingSummary}
+                    </span>
                   ) : null}
                 </div>
               ) : null}
@@ -564,10 +574,24 @@ export function ExtractDashboard() {
 
   async function persistExtraction(record: ExtractionRecord) {
     try {
+      const payload = {
+        id: record.id,
+        url: record.url,
+        status: record.status,
+        durationMs: record.durationMs,
+        createdAt: record.createdAt,
+        ...(record.prompt !== undefined ? { prompt: record.prompt } : {}),
+        modelId: record.modelId ?? null,
+        useProxy: record.useProxy === true,
+        pricingSummary: record.pricingSummary ?? null,
+        ...(record.resultText !== undefined
+          ? { resultText: record.resultText }
+          : {}),
+      }
       const r = await fetch("/api/history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(record),
+        body: JSON.stringify(payload),
       })
       if (!r.ok) return
       const j = (await r.json()) as { item?: ExtractionRecord }
@@ -701,6 +725,9 @@ export function ExtractDashboard() {
     const createdAt = new Date().toISOString()
     const modelIdForRun = chatModelId.trim() || undefined
     const useProxyForRun = useWebUnblockerProxy
+    const pricingForRun =
+      catalogModels.find((m) => m.id === (chatModelId.trim() || ""))
+        ?.pricingSummary ?? undefined
 
     setStreamEntries([
       {
@@ -722,6 +749,7 @@ export function ExtractDashboard() {
       prompt: p,
       modelId: modelIdForRun,
       useProxy: useProxyForRun,
+      pricingSummary: pricingForRun,
     })
     setStreamStartedAt(Date.now())
 
@@ -771,6 +799,7 @@ export function ExtractDashboard() {
             prompt: p,
             modelId: modelIdForRun,
             useProxy: useProxyForRun,
+            pricingSummary: pricingForRun,
             resultText: "Cancelled by user.",
           })
           return
@@ -822,6 +851,7 @@ export function ExtractDashboard() {
           prompt: p,
           modelId: modelIdForRun,
           useProxy: useProxyForRun,
+          pricingSummary: pricingForRun,
           resultText: errText,
         })
         return
@@ -842,6 +872,7 @@ export function ExtractDashboard() {
             prompt: p,
             modelId: modelIdForRun,
             useProxy: useProxyForRun,
+            pricingSummary: pricingForRun,
             resultText: "Cancelled by user.",
           })
           return
@@ -861,6 +892,7 @@ export function ExtractDashboard() {
           prompt: p,
           modelId: modelIdForRun,
           useProxy: useProxyForRun,
+          pricingSummary: pricingForRun,
           resultText: errText,
         })
         return
@@ -895,6 +927,7 @@ export function ExtractDashboard() {
         prompt: p,
         modelId: modelIdForRun,
         useProxy: useProxyForRun,
+        pricingSummary: pricingForRun,
         resultText: acc,
       })
     } catch (e) {
@@ -925,6 +958,7 @@ export function ExtractDashboard() {
           prompt: p,
           modelId: modelIdForRun,
           useProxy: useProxyForRun,
+          pricingSummary: pricingForRun,
           resultText: "Cancelled by user.",
         })
         return
@@ -952,6 +986,7 @@ export function ExtractDashboard() {
         prompt: p,
         modelId: modelIdForRun,
         useProxy: useProxyForRun,
+        pricingSummary: pricingForRun,
         resultText: msg,
       })
     } finally {

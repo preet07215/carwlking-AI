@@ -10,6 +10,7 @@ export const runtime = "nodejs"
 const MAX_RESULT_CHARS = 500_000
 const MAX_PROMPT_CHARS = 32_000
 const MAX_MODEL_ID_CHARS = 512
+const MAX_PRICING_SUMMARY_CHARS = 2048
 
 const STATUSES: ExtractionStatus[] = ["completed", "running", "failed"]
 
@@ -51,7 +52,9 @@ function parseRecord(body: unknown): ExtractionRecord | NextResponse {
   }
 
   let modelId: string | undefined
-  if (typeof b.modelId === "string") {
+  if (b.modelId === null) {
+    modelId = undefined
+  } else if (typeof b.modelId === "string") {
     const t = b.modelId.trim()
     if (t.length > MAX_MODEL_ID_CHARS) {
       return NextResponse.json(
@@ -63,6 +66,21 @@ function parseRecord(body: unknown): ExtractionRecord | NextResponse {
   }
 
   const useProxy = b.useProxy === true
+
+  let pricingSummary: string | undefined
+  if (typeof b.pricingSummary === "string") {
+    const t = b.pricingSummary.trim()
+    if (t.length > MAX_PRICING_SUMMARY_CHARS) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `pricingSummary exceeds ${MAX_PRICING_SUMMARY_CHARS} characters`,
+        },
+        { status: 400 }
+      )
+    }
+    if (t) pricingSummary = t
+  }
 
   if (!id || !url) {
     return NextResponse.json({ ok: false, error: "id and url required" }, { status: 400 })
@@ -80,6 +98,7 @@ function parseRecord(body: unknown): ExtractionRecord | NextResponse {
     prompt,
     modelId,
     useProxy,
+    pricingSummary,
     resultText,
   }
 }
