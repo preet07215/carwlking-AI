@@ -7,6 +7,7 @@ import {
 } from "@/lib/hermes/client"
 import { formatGenericHermesFailure } from "@/lib/hermes/errors"
 import { chatBodyForExtract } from "@/lib/hermes/extract-messages"
+import { getOxylabsWebUnblockerHeaderPairs } from "@/lib/proxy/oxylabs-hermes-headers"
 
 function assistantContent(data: unknown): string {
   if (!data || typeof data !== "object") return ""
@@ -47,17 +48,35 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: msg }, { status: 400 })
   }
 
-  const { targetUrl, prompt, headersSample } = payload
+  const { targetUrl, prompt, headersSample, model: modelOverride, useProxy } =
+    payload
+
+  const proxyPairs = useProxy ? getOxylabsWebUnblockerHeaderPairs() : null
+  if (useProxy && !proxyPairs) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Web unblocker proxy is enabled but OXYLABS_WEB_UNBLOCKER_USERNAME / OXYLABS_WEB_UNBLOCKER_PASSWORD are not set on the server.",
+      },
+      { status: 400 }
+    )
+  }
 
   const started = Date.now()
 
   try {
-    const chatPayload = chatBodyForExtract({
-      targetUrl,
-      prompt,
-      headersSample,
+    const chatPayload = chatBodyForExtract(
+      {
+        targetUrl,
+        prompt,
+        headersSample,
+      },
+      { stream: false, model: modelOverride }
+    )
+    const raw = await hermesChatCompletion(chatPayload, {
+      extraHeaders: proxyPairs ?? undefined,
     })
-    const raw = await hermesChatCompletion(chatPayload)
     const content = assistantContent(raw)
     const durationMs = Date.now() - started
 

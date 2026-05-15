@@ -43,9 +43,10 @@ export function chatBodyForExtract(
     prompt: string
     headersSample?: string
   },
-  options?: { stream?: boolean }
+  options?: { stream?: boolean; model?: string }
 ) {
-  const { model } = getHermesServerConfig()
+  const { model: envModel } = getHermesServerConfig()
+  const model = options?.model?.trim() ? options.model.trim() : envModel
   return {
     model,
     messages: buildExtractionMessages(payload),

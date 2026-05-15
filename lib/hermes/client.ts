@@ -22,7 +22,10 @@ export class HermesUpstreamError extends Error {
 
 async function hermesAuthFetch(
   path: string,
-  init?: RequestInit & { skipJsonContentType?: boolean }
+  init?: RequestInit & {
+    skipJsonContentType?: boolean
+    extraHeaders?: Record<string, string>
+  }
 ): Promise<Response> {
   const { apiV1, origin, apiKey } = getHermesServerConfig()
   const url = path.startsWith("http")
@@ -33,6 +36,11 @@ async function hermesAuthFetch(
 
   const headers = new Headers(init?.headers)
   headers.set("Authorization", `Bearer ${apiKey}`)
+  if (init?.extraHeaders) {
+    for (const [k, v] of Object.entries(init.extraHeaders)) {
+      headers.set(k, v)
+    }
+  }
   if (
     init?.body &&
     !(init.body instanceof FormData) &&
@@ -44,7 +52,10 @@ async function hermesAuthFetch(
   }
 
   try {
-    return await fetch(url, { ...init, headers })
+    const { extraHeaders, skipJsonContentType, ...rest } = init ?? {}
+    void extraHeaders
+    void skipJsonContentType
+    return await fetch(url, { ...rest, headers })
   } catch (err) {
     if (isLikelyConnectionFailure(err)) {
       const { error, hint, code } = formatHermesConnectionHelp(err, url)
@@ -109,11 +120,15 @@ export async function hermesCapabilities(): Promise<unknown> {
 }
 
 /** OpenAI chat.completions non-streaming */
-export async function hermesChatCompletion(body: Record<string, unknown>): Promise<unknown> {
+export async function hermesChatCompletion(
+  body: Record<string, unknown>,
+  options?: { extraHeaders?: Record<string, string> }
+): Promise<unknown> {
   const res = await hermesAuthFetch("/chat/completions", {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
+    extraHeaders: options?.extraHeaders,
   })
   const text = await res.text()
   if (!res.ok) {

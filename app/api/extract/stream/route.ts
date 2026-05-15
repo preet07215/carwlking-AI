@@ -7,6 +7,7 @@ import {
   isLikelyConnectionFailure,
 } from "@/lib/hermes/errors"
 import { chatBodyForExtract } from "@/lib/hermes/extract-messages"
+import { getOxylabsWebUnblockerHeaderPairs } from "@/lib/proxy/oxylabs-hermes-headers"
 
 /**
  * Forwards to Hermes chat.completions with stream: true (SSE).
@@ -31,18 +32,38 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: msg }, { status: 400 })
   }
 
+  const { targetUrl, prompt, headersSample, model: modelOverride, useProxy } =
+    payload
   const { apiV1, apiKey } = getHermesServerConfig()
-  const chatPayload = chatBodyForExtract(payload, { stream: true })
+  const chatPayload = chatBodyForExtract(
+    { targetUrl, prompt, headersSample },
+    { stream: true, model: modelOverride }
+  )
+
+  const proxyPairs = useProxy ? getOxylabsWebUnblockerHeaderPairs() : null
+  if (useProxy && !proxyPairs) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Web unblocker proxy is enabled but OXYLABS_WEB_UNBLOCKER_USERNAME / OXYLABS_WEB_UNBLOCKER_PASSWORD are not set on the server.",
+      },
+      { status: 400 }
+    )
+  }
+
+  const forwardHeaders: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+    ...(proxyPairs ?? {}),
+  }
 
   let upstream: Response
   try {
     upstream = await fetch(`${apiV1}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-      },
+      headers: forwardHeaders,
       body: JSON.stringify(chatPayload),
     })
   } catch (err) {
