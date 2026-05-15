@@ -8,9 +8,9 @@ import {
 } from "framer-motion"
 import {
   ChevronDown,
-  Code2,
   Copy,
   Download,
+  Info,
   Link2,
   Loader2,
   Sparkles,
@@ -1145,13 +1145,39 @@ console.log(text)`
           />
 
           <div className="space-y-2">
+            <div
+              className="flex gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:border-amber-400/25 dark:bg-amber-500/15 dark:text-amber-50/95"
+              role="note"
+            >
+              <Info
+                className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-200"
+                aria-hidden
+              />
+              <p>
+                <span className="font-medium">
+                  Hermes treats the JSON <code className="rounded bg-black/10 px-1 py-px dark:bg-black/30">model</code> field as cosmetic
+                </span>
+                — the LLM in use comes from{" "}
+                <span className="font-medium">Hermes server config</span>{" "}
+                (e.g. default / provider in your gateway), not from this picker. See{" "}
+                <a
+                  href="https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server#limitations"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium underline underline-offset-2"
+                >
+                  API Server → Limitations
+                </a>
+                . We still send <code className="rounded bg-black/10 px-1 py-px dark:bg-black/30">model</code> for OpenAI compatibility and session labels.
+              </p>
+            </div>
             <Label
               htmlFor={
                 catalogModels.length > 0 ? "chat-model-trigger" : "chat-model"
               }
               className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
-              Model (Hermes + OpenRouter)
+              Request <code className="font-mono text-[0.7rem] font-normal">model</code> (Hermes + OpenRouter reference)
             </Label>
             {catalogModels.length > 0 ? (
               <div ref={modelPickerRef} className="relative">
@@ -1268,7 +1294,7 @@ console.log(text)`
                 id="chat-model"
                 value={chatModelId}
                 onChange={(e) => setChatModelId(e.target.value)}
-                placeholder="Model id (Hermes /v1/models or OpenRouter id)"
+                placeholder="Cosmetic id — e.g. hermes-agent or GET /v1/models value"
                 className="h-11 rounded-xl border-border/80 bg-background/50 text-base shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-12 md:text-[0.95rem]"
               />
             )}
@@ -1278,9 +1304,8 @@ console.log(text)`
               </p>
             ) : (
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Dropdown lists{" "}
+                The list shows{" "}
                 <span className="font-medium text-foreground/85">Hermes</span>{" "}
-                ids from{" "}
                 <code className="rounded bg-muted/50 px-1">GET /v1/models</code>{" "}
                 first, then{" "}
                 <a
@@ -1291,27 +1316,20 @@ console.log(text)`
                 >
                   OpenRouter
                 </a>{" "}
-                (deduped). The chosen <code className="rounded bg-muted/50 px-1">id</code> is always sent as{" "}
-                <code className="rounded bg-muted/50 px-1">model</code> on{" "}
-                <a
-                  href="https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  Hermes
-                </a>{" "}
+                (deduped) for naming and reference. The selected{" "}
+                <code className="rounded bg-muted/50 px-1">id</code> is sent as
+                JSON <code className="rounded bg-muted/50 px-1">model</code> on{" "}
                 <code className="rounded bg-muted/50 px-1">
                   POST /v1/chat/completions
                 </code>
-                . If none is selected, the server uses{" "}
-                <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>
-                , then{" "}
-                <code className="rounded bg-muted/50 px-1">
+                . If empty, this app uses{" "}
+                <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>,{" "}
+                then <code className="rounded bg-muted/50 px-1">
                   OPENROUTER_DEFAULT_MODEL
                 </code>
-                , then a built-in OpenRouter-style default. Set those env vars to
-                ids your Hermes gateway accepts.
+                , then <code className="rounded bg-muted/50 px-1">hermes-agent</code>
+                . To change the <span className="font-medium">actual</span> LLM,
+                edit Hermes gateway / profile configuration — not only this field.
               </p>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground/90">

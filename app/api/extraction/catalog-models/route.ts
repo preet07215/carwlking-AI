@@ -21,8 +21,9 @@ export type UnifiedCatalogModel = {
 }
 
 /**
- * Single catalog for Extract: Hermes GET /v1/models first, then OpenRouter models
- * (deduped by id). Default prefers HERMES_MODEL, then OPENROUTER_DEFAULT_MODEL.
+ * Catalog for the Extract UI: Hermes GET /v1/models first, then OpenRouter (deduped).
+ * Listing OpenRouter ids is for labels/reference only — Hermes chat `model` is cosmetic;
+ * the running LLM is configured in Hermes (e.g. config.yaml), not by this dropdown.
  */
 export async function GET() {
   const { model: hermesEnvDefault } = getHermesServerConfig()

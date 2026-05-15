@@ -46,6 +46,7 @@ export function chatBodyForExtract(
   options?: { stream?: boolean; model?: string }
 ) {
   const { model: envModel, maxTokens } = getHermesServerConfig()
+  // Hermes accepts `model` but uses server-configured LLM (API docs: field is cosmetic).
   const model = options?.model?.trim() ? options.model.trim() : envModel
   const body: Record<string, unknown> = {
     model,

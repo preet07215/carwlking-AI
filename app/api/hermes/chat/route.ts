@@ -9,6 +9,7 @@ import { getHermesServerConfig } from "@/lib/hermes/config"
 /**
  * Passthrough to Hermes POST /v1/chat/completions (non-streaming).
  * Body must match OpenAI chat completions shape (model, messages, stream?: false).
+ * Official Hermes docs: JSON `model` may be cosmetic — real LLM is server-configured.
  */
 export async function POST(req: Request) {
   let body: unknown

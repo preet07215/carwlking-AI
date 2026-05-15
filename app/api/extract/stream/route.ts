@@ -12,6 +12,7 @@ import { getOxylabsWebUnblockerHeaderPairs } from "@/lib/proxy/oxylabs-hermes-he
 /**
  * Forwards to Hermes chat.completions with stream: true (SSE).
  * Client uses fetch + ReadableStream (POST body required).
+ * Note: Hermes may treat JSON `model` as cosmetic; LLM is server-configured.
  */
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"

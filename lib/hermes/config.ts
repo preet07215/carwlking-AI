@@ -4,11 +4,12 @@
  */
 
 /**
- * Last-resort chat `model` when `HERMES_MODEL` and `OPENROUTER_DEFAULT_MODEL` are unset.
- * Use a real provider id (e.g. OpenRouter); `"hermes-agent"` is not a chat completions model name.
+ * JSON `model` on `POST /v1/chat/completions` when env vars are unset.
+ * Per Hermes API docs, this field is cosmetic — the real LLM is set in Hermes server config.
+ * `hermes-agent` matches the default profile / official examples.
+ * @see https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server (Limitations)
  */
-export const DEFAULT_HERMES_CHAT_MODEL =
-  "qwen/qwen3-next-80b-a3b-instruct:free"
+export const DEFAULT_HERMES_CHAT_MODEL = "hermes-agent"
 
 function optionalMaxTokens(raw: string | undefined): number | undefined {
   if (raw == null || !String(raw).trim()) return undefined

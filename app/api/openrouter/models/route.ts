@@ -12,9 +12,9 @@ export const runtime = "nodejs"
 const OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
 
 /**
- * OpenRouter model catalog for Extract: `id` is sent as Hermes `POST /v1/chat/completions` `model`
- * when your gateway routes to OpenRouter (or accepts that id).
- * Optional OPENROUTER_API_KEY improves rate limits.
+ * OpenRouter model list for the Extract UI (labels / pricing reference).
+ * When forwarded to stock Hermes API Server, JSON `model` is cosmetic — real LLM is Hermes server-side.
+ * Optional OPENROUTER_API_KEY improves rate limits on OpenRouter’s public list.
  */
 export async function GET() {
   const { model: hermesFallback } = getHermesServerConfig()
