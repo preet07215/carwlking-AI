@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion } from "framer-motion"
-import { Hexagon, Sparkles } from "lucide-react"
+import { BookMarked, Hexagon, Sparkles } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
@@ -24,6 +24,7 @@ export function SidebarNav({
   const pathname = usePathname()
   const showLabels = forceExpanded || !collapsed
   const extractActive = pathname === "/" || pathname.startsWith("/extract")
+  const skillsActive = pathname === "/skills" || pathname.startsWith("/skills/")
 
   return (
     <ScrollArea className="h-full">
@@ -85,6 +86,38 @@ export function SidebarNav({
                 )}
               >
                 Extract
+              </span>
+            )}
+          </Link>
+
+          <Link
+            href="/skills"
+            onClick={onNavigate}
+            className={cn(
+              buttonVariants({
+                variant: skillsActive ? "secondary" : "ghost",
+                size: "default",
+              }),
+              "h-10 w-full justify-start gap-2 rounded-xl border border-transparent transition-all",
+              skillsActive &&
+                "border-primary/15 bg-gradient-to-r from-primary/12 to-fuchsia-500/8 shadow-[inset_0_1px_0_0_oklch(1_0_0_/0.06)] dark:from-primary/20 dark:to-fuchsia-500/10",
+              collapsed && !forceExpanded && "size-10 px-0"
+            )}
+          >
+            <BookMarked
+              className={cn(
+                "size-4 shrink-0",
+                skillsActive && "text-primary"
+              )}
+            />
+            {showLabels && (
+              <span
+                className={cn(
+                  "truncate text-sm font-medium",
+                  skillsActive && "text-foreground"
+                )}
+              >
+                Hermes skills
               </span>
             )}
           </Link>

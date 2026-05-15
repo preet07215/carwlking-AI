@@ -9,6 +9,7 @@ export const runtime = "nodejs"
 
 const MAX_RESULT_CHARS = 500_000
 const MAX_PROMPT_CHARS = 32_000
+const MAX_MODEL_ID_CHARS = 512
 
 const STATUSES: ExtractionStatus[] = ["completed", "running", "failed"]
 
@@ -49,6 +50,20 @@ function parseRecord(body: unknown): ExtractionRecord | NextResponse {
     if (t) prompt = t
   }
 
+  let modelId: string | undefined
+  if (typeof b.modelId === "string") {
+    const t = b.modelId.trim()
+    if (t.length > MAX_MODEL_ID_CHARS) {
+      return NextResponse.json(
+        { ok: false, error: `modelId exceeds ${MAX_MODEL_ID_CHARS} characters` },
+        { status: 400 }
+      )
+    }
+    if (t) modelId = t
+  }
+
+  const useProxy = b.useProxy === true
+
   if (!id || !url) {
     return NextResponse.json({ ok: false, error: "id and url required" }, { status: 400 })
   }
@@ -63,6 +78,8 @@ function parseRecord(body: unknown): ExtractionRecord | NextResponse {
     durationMs,
     createdAt,
     prompt,
+    modelId,
+    useProxy,
     resultText,
   }
 }

@@ -7,6 +7,8 @@ export type ExtractionHistoryRow = {
   duration_ms: number
   created_at: string
   prompt: string | null
+  model_id: string | null
+  use_proxy: boolean | null
   result_text: string | null
 }
 
@@ -26,6 +28,8 @@ export function dbRowToRecord(row: ExtractionHistoryRow): ExtractionRecord {
     durationMs: row.duration_ms,
     createdAt: row.created_at,
     prompt: row.prompt ?? undefined,
+    modelId: row.model_id ?? undefined,
+    useProxy: row.use_proxy === true,
     resultText: row.result_text ?? undefined,
   }
 }
@@ -38,6 +42,8 @@ export function recordToDbRow(r: ExtractionRecord): ExtractionHistoryRow {
     duration_ms: r.durationMs,
     created_at: r.createdAt,
     prompt: r.prompt ?? null,
+    model_id: r.modelId?.trim() || null,
+    use_proxy: r.useProxy === true,
     result_text: r.resultText ?? null,
   }
 }

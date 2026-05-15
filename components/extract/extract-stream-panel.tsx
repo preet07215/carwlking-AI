@@ -2,9 +2,10 @@
 
 import * as React from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Activity, CheckCircle2, Loader2, Wrench } from "lucide-react"
+import { Activity, CheckCircle2, Loader2, Square, Wrench } from "lucide-react"
 
 import { GlassPanel } from "@/components/ui/glass-panel"
+import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import type { StreamToolEntry } from "@/lib/extract/sse-client"
@@ -14,11 +15,16 @@ export function ExtractStreamProgress({
   entries,
   liveText,
   requestTimerLabel,
+  onStop,
+  stopDisabled,
 }: {
   active: boolean
   entries: StreamToolEntry[]
   liveText: string
   requestTimerLabel?: string | null
+  /** Stops the in-flight SSE / fetch when provided */
+  onStop?: () => void
+  stopDisabled?: boolean
 }) {
   const modelTextScrollRef = React.useRef<HTMLDivElement>(null)
 
@@ -42,6 +48,19 @@ export function ExtractStreamProgress({
           Live stream (SSE)
         </h3>
         <span className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          {active && onStop ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="xs"
+              className="h-7 gap-1 rounded-lg px-2"
+              disabled={stopDisabled}
+              onClick={onStop}
+            >
+              <Square className="size-3 fill-current" />
+              Stop
+            </Button>
+          ) : null}
           {requestTimerLabel ? (
             <span className="tabular-nums">
               Req{" "}

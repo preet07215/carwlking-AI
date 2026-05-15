@@ -8,7 +8,8 @@ export const runtime = "nodejs"
 const OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
 
 /**
- * Lists OpenRouter models for the Extract UI. Optional OPENROUTER_API_KEY improves rate limits.
+ * Lists models from OpenRouter (optional; not used by the Extract flow — that uses Hermes /v1/models).
+ * Optional OPENROUTER_API_KEY improves rate limits.
  */
 export async function GET() {
   const { model: defaultModel } = getHermesServerConfig()

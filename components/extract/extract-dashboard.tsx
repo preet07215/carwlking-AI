@@ -14,6 +14,7 @@ import {
   Link2,
   Loader2,
   Sparkles,
+  Square,
   Trash2,
 } from "lucide-react"
 
@@ -132,10 +133,15 @@ function RecentExtractions({
   records,
   onRemove,
   removeBusyId,
+  activeStreamingId,
+  onStopStreaming,
 }: {
   records: ExtractionRecord[]
   onRemove: (id: string) => void
   removeBusyId: string | null
+  /** When set, the matching running row shows Stop (in-flight extraction) */
+  activeStreamingId: string | null
+  onStopStreaming: () => void
 }) {
   const reduceMotion = useReducedMotion()
 
@@ -206,6 +212,23 @@ function RecentExtractions({
                     {promptPreview}
                   </p>
                 ) : null}
+                {row.modelId || row.useProxy ? (
+                  <p className="mt-0.5 flex flex-wrap items-center gap-2">
+                    {row.modelId ? (
+                      <code className="max-w-full truncate rounded bg-muted/60 px-1 py-0.5 font-mono text-[0.65rem] text-muted-foreground">
+                        {row.modelId}
+                      </code>
+                    ) : null}
+                    {row.useProxy ? (
+                      <Badge
+                        variant="outline"
+                        className="h-5 rounded-md text-[0.65rem] font-normal"
+                      >
+                        Proxy
+                      </Badge>
+                    ) : null}
+                  </p>
+                ) : null}
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {formatRelativeTime(row.createdAt)}
                 </p>
@@ -214,6 +237,18 @@ function RecentExtractions({
                 {row.status === "running" ? "—" : `${row.durationMs}ms`}
               </div>
               <div className="col-span-2 flex justify-end gap-1">
+                {row.status === "running" &&
+                row.id === activeStreamingId ? (
+                  <Button
+                    size="icon-sm"
+                    variant="destructive"
+                    className="rounded-xl"
+                    aria-label="Stop extraction"
+                    onClick={onStopStreaming}
+                  >
+                    <Square className="size-3.5 fill-current" />
+                  </Button>
+                ) : null}
                 <Badge
                   variant="outline"
                   className={cn("rounded-lg capitalize", statusBadge(row.status))}
@@ -268,6 +303,23 @@ function RecentExtractions({
                   {promptPreview}
                 </p>
               ) : null}
+              {row.modelId || row.useProxy ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {row.modelId ? (
+                    <code className="max-w-full truncate rounded bg-muted/60 px-1 py-0.5 font-mono text-[0.65rem] text-muted-foreground">
+                      {row.modelId}
+                    </code>
+                  ) : null}
+                  {row.useProxy ? (
+                    <Badge
+                      variant="outline"
+                      className="h-5 rounded-md text-[0.65rem] font-normal"
+                    >
+                      Proxy
+                    </Badge>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>{formatRelativeTime(row.createdAt)}</span>
                 <span className="tabular-nums">
@@ -275,7 +327,19 @@ function RecentExtractions({
                 </span>
               </div>
               <Separator />
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                {row.status === "running" &&
+                row.id === activeStreamingId ? (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="rounded-xl"
+                    onClick={onStopStreaming}
+                  >
+                    <Square className="size-4 fill-current" />
+                    Stop
+                  </Button>
+                ) : null}
                 <Button
                   size="sm"
                   variant="outline"
@@ -314,11 +378,11 @@ export function ExtractDashboard() {
   const [targetUrl, setTargetUrl] = React.useState("")
   const [prompt, setPrompt] = React.useState("")
   const [headersFile, setHeadersFile] = React.useState<File | null>(null)
-  const [openRouterModels, setOpenRouterModels] = React.useState<
+  const [catalogModels, setCatalogModels] = React.useState<
     { id: string; name: string }[]
   >([])
   const [chatModelId, setChatModelId] = React.useState("")
-  const [openRouterModelsHint, setOpenRouterModelsHint] = React.useState<
+  const [catalogModelsHint, setCatalogModelsHint] = React.useState<
     string | null
   >(null)
   const [modelMenuOpen, setModelMenuOpen] = React.useState(false)
@@ -357,6 +421,14 @@ export function ExtractDashboard() {
     null
   )
   const [streamTick, setStreamTick] = React.useState(0)
+  const streamAbortRef = React.useRef<AbortController | null>(null)
+  const [streamingRunId, setStreamingRunId] = React.useState<string | null>(
+    null
+  )
+
+  const stopActiveExtraction = React.useCallback(() => {
+    streamAbortRef.current?.abort()
+  }, [])
 
   const requestTimerLabel = React.useMemo(() => {
     if (streamActive && streamStartedAt !== null) {
@@ -380,20 +452,20 @@ export function ExtractDashboard() {
     return () => clearInterval(id)
   }, [streamActive, streamStartedAt])
 
-  const filteredOpenRouterModels = React.useMemo(() => {
+  const filteredCatalogModels = React.useMemo(() => {
     const q = modelSearch.trim().toLowerCase()
-    if (!q) return openRouterModels
-    return openRouterModels.filter(
+    if (!q) return catalogModels
+    return catalogModels.filter(
       (m) =>
         m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
     )
-  }, [openRouterModels, modelSearch])
+  }, [catalogModels, modelSearch])
 
   const selectedModelLabel = React.useMemo(() => {
-    const m = openRouterModels.find((x) => x.id === chatModelId)
+    const m = catalogModels.find((x) => x.id === chatModelId)
     if (m) return m.name
     return chatModelId.trim() || "Select model…"
-  }, [openRouterModels, chatModelId])
+  }, [catalogModels, chatModelId])
 
   React.useEffect(() => {
     if (!modelMenuOpen) return
@@ -416,35 +488,39 @@ export function ExtractDashboard() {
     let cancelled = false
     void (async () => {
       try {
-        const r = await fetch("/api/openrouter/models")
+        const r = await fetch("/api/hermes/chat-models")
         const j = (await r.json()) as {
           ok?: boolean
           models?: { id: string; name: string }[]
           defaultModel?: string
           error?: string
+          detail?: string
         }
         if (cancelled) return
-        if (!r.ok || !Array.isArray(j.models) || j.models.length === 0) {
-          setOpenRouterModelsHint(
-            j.error ??
-              "Could not load the OpenRouter catalog. Enter a model id manually."
+
+        const models = Array.isArray(j.models) ? j.models : []
+        setCatalogModels(models)
+
+        if (!r.ok || j.ok === false) {
+          const hint = [j.error, j.detail].filter(Boolean).join(" — ")
+          setCatalogModelsHint(
+            hint ||
+              "Could not load Hermes /v1/models. Confirm API_SERVER_ENABLED and hermes gateway per the Hermes API server docs; you can still type a model id below."
           )
-          if (j.defaultModel) {
-            setChatModelId((prev) => (prev.trim() ? prev : j.defaultModel!))
-          }
-          return
+        } else {
+          setCatalogModelsHint(null)
         }
-        setOpenRouterModels(j.models)
-        setOpenRouterModelsHint(null)
+
         setChatModelId((prev) => {
           if (prev.trim()) return prev
-          return j.defaultModel ?? j.models![0]!.id
+          return j.defaultModel ?? models[0]?.id ?? ""
         })
       } catch (e) {
         if (!cancelled) {
-          setOpenRouterModelsHint(
-            e instanceof Error ? e.message : "Failed to load models."
+          setCatalogModelsHint(
+            e instanceof Error ? e.message : "Failed to load Hermes models."
           )
+          setCatalogModels([])
         }
       }
     })()
@@ -613,6 +689,8 @@ export function ExtractDashboard() {
     const started = Date.now()
     const id = crypto.randomUUID()
     const createdAt = new Date().toISOString()
+    const modelIdForRun = chatModelId.trim() || undefined
+    const useProxyForRun = useWebUnblockerProxy
 
     setStreamEntries([
       {
@@ -632,13 +710,21 @@ export function ExtractDashboard() {
       durationMs: 0,
       createdAt,
       prompt: p,
+      modelId: modelIdForRun,
+      useProxy: useProxyForRun,
     })
     setStreamStartedAt(Date.now())
+
+    streamAbortRef.current?.abort()
+    const ac = new AbortController()
+    streamAbortRef.current = ac
+    setStreamingRunId(id)
 
     try {
       const res = await fetch("/api/extract/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           targetUrl: u,
           prompt: p,
@@ -651,6 +737,34 @@ export function ExtractDashboard() {
       const contentType = res.headers.get("content-type") ?? ""
 
       if (!res.ok) {
+        if (ac.signal.aborted) {
+          const durationMs = Date.now() - started
+          setStreamActive(false)
+          setStreamStartedAt(null)
+          setStreamEntries((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              at: Date.now(),
+              kind: "error",
+              title: "Stopped",
+              detail: "You cancelled this extraction.",
+            },
+          ])
+          setLastOutcome({ ok: false, error: "Cancelled.", durationMs })
+          commitRun({
+            id,
+            url: u,
+            status: "failed",
+            durationMs,
+            createdAt,
+            prompt: p,
+            modelId: modelIdForRun,
+            useProxy: useProxyForRun,
+            resultText: "Cancelled by user.",
+          })
+          return
+        }
         let data = {} as Record<string, unknown>
         try {
           data = (await res.json()) as Record<string, unknown>
@@ -696,12 +810,32 @@ export function ExtractDashboard() {
           durationMs,
           createdAt,
           prompt: p,
+          modelId: modelIdForRun,
+          useProxy: useProxyForRun,
           resultText: errText,
         })
         return
       }
 
       if (!contentType.includes("text/event-stream")) {
+        if (ac.signal.aborted) {
+          const durationMs = Date.now() - started
+          setStreamActive(false)
+          setStreamStartedAt(null)
+          setLastOutcome({ ok: false, error: "Cancelled.", durationMs })
+          commitRun({
+            id,
+            url: u,
+            status: "failed",
+            durationMs,
+            createdAt,
+            prompt: p,
+            modelId: modelIdForRun,
+            useProxy: useProxyForRun,
+            resultText: "Cancelled by user.",
+          })
+          return
+        }
         const fallback = await res.text()
         const durationMs = Date.now() - started
         setStreamActive(false)
@@ -715,12 +849,15 @@ export function ExtractDashboard() {
           durationMs,
           createdAt,
           prompt: p,
+          modelId: modelIdForRun,
+          useProxy: useProxyForRun,
           resultText: errText,
         })
         return
       }
 
       const acc = await consumeChatCompletionSse(res, {
+        signal: ac.signal,
         onStructured: (e) => {
           setStreamEntries((prev) => [...prev, e])
         },
@@ -746,10 +883,42 @@ export function ExtractDashboard() {
         durationMs,
         createdAt,
         prompt: p,
+        modelId: modelIdForRun,
+        useProxy: useProxyForRun,
         resultText: acc,
       })
     } catch (e) {
       const durationMs = Date.now() - started
+      const aborted =
+        (e instanceof DOMException && e.name === "AbortError") ||
+        (e instanceof Error && e.name === "AbortError")
+      if (aborted) {
+        setStreamActive(false)
+        setStreamStartedAt(null)
+        setStreamEntries((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            at: Date.now(),
+            kind: "error",
+            title: "Stopped",
+            detail: "You cancelled this extraction.",
+          },
+        ])
+        setLastOutcome({ ok: false, error: "Cancelled.", durationMs })
+        commitRun({
+          id,
+          url: u,
+          status: "failed",
+          durationMs,
+          createdAt,
+          prompt: p,
+          modelId: modelIdForRun,
+          useProxy: useProxyForRun,
+          resultText: "Cancelled by user.",
+        })
+        return
+      }
       const msg = e instanceof Error ? e.message : "Network error"
       setStreamActive(false)
       setStreamStartedAt(null)
@@ -771,10 +940,14 @@ export function ExtractDashboard() {
         durationMs,
         createdAt,
         prompt: p,
+        modelId: modelIdForRun,
+        useProxy: useProxyForRun,
         resultText: msg,
       })
     } finally {
       setLoading(false)
+      if (streamAbortRef.current === ac) streamAbortRef.current = null
+      setStreamingRunId((cur) => (cur === id ? null : cur))
     }
   }
 
@@ -928,13 +1101,13 @@ console.log(text)`
           <div className="space-y-2">
             <Label
               htmlFor={
-                openRouterModels.length > 0 ? "chat-model-trigger" : "chat-model"
+                catalogModels.length > 0 ? "chat-model-trigger" : "chat-model"
               }
               className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
-              Model (OpenRouter catalog)
+              Model (Hermes /v1/models)
             </Label>
-            {openRouterModels.length > 0 ? (
+            {catalogModels.length > 0 ? (
               <div ref={modelPickerRef} className="relative">
                 <button
                   type="button"
@@ -979,12 +1152,12 @@ console.log(text)`
                     />
                     <ScrollArea className="h-[min(18rem,50vh)]">
                       <div className="p-1">
-                        {filteredOpenRouterModels.length === 0 ? (
+                        {filteredCatalogModels.length === 0 ? (
                           <p className="px-2 py-4 text-center text-sm text-muted-foreground">
                             No matches
                           </p>
                         ) : (
-                          filteredOpenRouterModels.map((m) => (
+                          filteredCatalogModels.map((m) => (
                             <button
                               key={m.id}
                               type="button"
@@ -1020,33 +1193,48 @@ console.log(text)`
                 id="chat-model"
                 value={chatModelId}
                 onChange={(e) => setChatModelId(e.target.value)}
-                placeholder="e.g. openai/gpt-4o or hermes-agent"
+                placeholder="e.g. hermes-agent (from GET /v1/models)"
                 className="h-11 rounded-xl border-border/80 bg-background/50 text-base shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-12 md:text-[0.95rem]"
               />
             )}
-            {openRouterModelsHint ? (
+            {catalogModelsHint ? (
               <p className="text-xs text-amber-700 dark:text-amber-200/90">
-                {openRouterModelsHint}
+                {catalogModelsHint}
               </p>
             ) : (
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Passed to Hermes as the chat{" "}
-                <code className="rounded bg-muted/50 px-1">model</code> field. List
-                from OpenRouter; default falls back to{" "}
+                Uses the same{" "}
+                <code className="rounded bg-muted/50 px-1">model</code> string
+                as{" "}
+                <a
+                  href="https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Hermes API server
+                </a>{" "}
+                <code className="rounded bg-muted/50 px-1">POST /v1/chat/completions</code>: ids
+                come from{" "}
+                <code className="rounded bg-muted/50 px-1">GET /v1/models</code>{" "}
+                (e.g. <code className="rounded bg-muted/50 px-1">hermes-agent</code>{" "}
+                or your profile name). The docs note the field is largely cosmetic
+                for routing — the real LLM is configured in Hermes&apos;s{" "}
+                <code className="rounded bg-muted/50 px-1">config.yaml</code>.
+                Server default:{" "}
                 <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>.
               </p>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground/90">
-              OpenRouter may close the stream with{" "}
+              Long browser-tool runs may hit upstream{" "}
               <span className="font-medium text-foreground/80">
-                Upstream idle timeout exceeded
-              </span>{" "}
-              when the model runs browser tools for a long stretch without emitting
-              tokens. Hermes often retries automatically; if failures persist, use a
-              snappier model, shorten the crawl, or point Hermes at a provider without
-              that idle limit. Optional env{" "}
-              <code className="rounded bg-muted/50 px-1">HERMES_MAX_TOKENS</code> can
-              help some setups.
+                idle timeouts
+              </span>
+              . Hermes often retries; if failures persist, tune the provider or
+              timeouts on the Hermes gateway, shorten the crawl, or use a provider
+              without strict idle limits. Optional env{" "}
+              <code className="rounded bg-muted/50 px-1">HERMES_MAX_TOKENS</code>{" "}
+              can help some setups.
             </p>
           </div>
 
@@ -1154,6 +1342,7 @@ console.log(text)`
           entries={streamEntries}
           liveText={streamingText}
           requestTimerLabel={requestTimerLabel}
+          onStop={streamActive ? stopActiveExtraction : undefined}
         />
       </motion.div>
 
@@ -1309,6 +1498,8 @@ console.log(text)`
           records={displayRecords}
           onRemove={removeRecord}
           removeBusyId={removeBusyId}
+          activeStreamingId={streamingRunId}
+          onStopStreaming={stopActiveExtraction}
         />
       </motion.section>
 

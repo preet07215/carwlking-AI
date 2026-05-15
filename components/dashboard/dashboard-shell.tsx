@@ -23,6 +23,10 @@ const titles: Record<string, { title: string; subtitle?: string }> = {
     title: "History",
     subtitle: "Past runs and exports (placeholder for future integration).",
   },
+  "/skills": {
+    title: "Hermes skills",
+    subtitle: "Create, edit, and remove agent skill definitions.",
+  },
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -30,7 +34,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = React.useState(false)
   const [mobileOpen, setMobileOpen] = React.useState(false)
 
-  const meta = titles[pathname] ?? titles["/"]
+  const meta =
+    titles[pathname] ??
+    (pathname.startsWith("/skills") ? titles["/skills"] : titles["/"])
 
   return (
     <div className="relative flex h-dvh max-h-dvh w-full max-w-[100vw] overflow-hidden">

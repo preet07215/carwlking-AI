@@ -24,10 +24,7 @@ export function getHermesServerConfig() {
     apiV1: `${origin}/v1`,
     apiKey,
     model,
-    /**
-     * Passed through on chat/completions when set. Helps some OpenRouter-backed
-     * setups; does not fix provider idle timeouts during long tool silence.
-     */
+    /** Optional `max_tokens` for chat/completions when `HERMES_MAX_TOKENS` is set. */
     maxTokens,
   }
 }

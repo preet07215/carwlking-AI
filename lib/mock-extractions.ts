@@ -8,6 +8,10 @@ export interface ExtractionRecord {
   createdAt: string
   /** User prompt — saved when the run starts */
   prompt?: string
+  /** Chat `model` id (Hermes GET /v1/models; cosmetic vs server config per Hermes docs) */
+  modelId?: string
+  /** Whether web unblocker proxy headers were enabled */
+  useProxy?: boolean
   /** When present, Download exports this extraction output */
   resultText?: string
 }

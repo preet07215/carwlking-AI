@@ -70,9 +70,10 @@ export async function consumeChatCompletionSse(
   opts: {
     onStructured?: (e: StreamToolEntry) => void
     onTextDelta?: (delta: string) => void
+    signal?: AbortSignal
   }
 ): Promise<string> {
-  const { onStructured, onTextDelta } = opts
+  const { onStructured, onTextDelta, signal } = opts
   const reader = response.body?.getReader()
   if (!reader) {
     onStructured?.({
@@ -82,6 +83,14 @@ export async function consumeChatCompletionSse(
       title: "No response body",
     })
     return ""
+  }
+
+  const onAbort = () => {
+    void reader.cancel("User stopped extraction")
+  }
+  if (signal) {
+    if (signal.aborted) onAbort()
+    else signal.addEventListener("abort", onAbort, { once: true })
   }
 
   const decoder = new TextDecoder()
@@ -166,7 +175,19 @@ export async function consumeChatCompletionSse(
   }
 
   while (true) {
-    const { done, value } = await reader.read()
+    let chunk: ReadableStreamReadResult<Uint8Array>
+    try {
+      chunk = await reader.read()
+    } catch (err) {
+      if (
+        signal?.aborted ||
+        (err instanceof DOMException && err.name === "AbortError")
+      ) {
+        throw new DOMException("Aborted", "AbortError")
+      }
+      throw err
+    }
+    const { done, value } = chunk
     if (done) break
     buffer += decoder.decode(value, { stream: true })
     const parts = buffer.split("\n\n")
@@ -178,6 +199,10 @@ export async function consumeChatCompletionSse(
   }
 
   if (buffer.trim()) handleEventBlock(buffer.trim())
+
+  if (signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError")
+  }
 
   return assembled
 }
