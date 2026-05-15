@@ -7,6 +7,7 @@ import {
   type Variants,
 } from "framer-motion"
 import {
+  ChevronDown,
   Code2,
   Copy,
   Download,
@@ -23,6 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import {
@@ -319,6 +321,9 @@ export function ExtractDashboard() {
   const [openRouterModelsHint, setOpenRouterModelsHint] = React.useState<
     string | null
   >(null)
+  const [modelMenuOpen, setModelMenuOpen] = React.useState(false)
+  const [modelSearch, setModelSearch] = React.useState("")
+  const modelPickerRef = React.useRef<HTMLDivElement | null>(null)
   const [useWebUnblockerProxy, setUseWebUnblockerProxy] = React.useState(false)
   const [liveRuns, setLiveRuns] = React.useState<ExtractionRecord[]>([])
   const [storedHistory, setStoredHistory] = React.useState<ExtractionRecord[]>(
@@ -374,6 +379,38 @@ export function ExtractDashboard() {
     const id = window.setInterval(() => setStreamTick((n) => n + 1), 1000)
     return () => clearInterval(id)
   }, [streamActive, streamStartedAt])
+
+  const filteredOpenRouterModels = React.useMemo(() => {
+    const q = modelSearch.trim().toLowerCase()
+    if (!q) return openRouterModels
+    return openRouterModels.filter(
+      (m) =>
+        m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+    )
+  }, [openRouterModels, modelSearch])
+
+  const selectedModelLabel = React.useMemo(() => {
+    const m = openRouterModels.find((x) => x.id === chatModelId)
+    if (m) return m.name
+    return chatModelId.trim() || "Select model…"
+  }, [openRouterModels, chatModelId])
+
+  React.useEffect(() => {
+    if (!modelMenuOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (modelPickerRef.current?.contains(e.target as Node)) return
+      setModelMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModelMenuOpen(false)
+    }
+    document.addEventListener("mousedown", onDoc)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onDoc)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [modelMenuOpen])
 
   React.useEffect(() => {
     let cancelled = false
@@ -890,28 +927,94 @@ console.log(text)`
 
           <div className="space-y-2">
             <Label
-              htmlFor="chat-model"
+              htmlFor={
+                openRouterModels.length > 0 ? "chat-model-trigger" : "chat-model"
+              }
               className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
               Model (OpenRouter catalog)
             </Label>
             {openRouterModels.length > 0 ? (
-              <select
-                id="chat-model"
-                value={chatModelId}
-                onChange={(e) => setChatModelId(e.target.value)}
-                className={cn(
-                  "flex h-11 w-full rounded-xl border border-border/80 bg-background/50 px-3 text-base shadow-sm outline-none transition-[border-color,box-shadow] duration-200",
-                  "focus-visible:border-primary/50 focus-visible:ring-[3px] focus-visible:ring-primary/25",
-                  "dark:bg-black/25 md:h-12"
-                )}
-              >
-                {openRouterModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
+              <div ref={modelPickerRef} className="relative">
+                <button
+                  type="button"
+                  id="chat-model-trigger"
+                  aria-expanded={modelMenuOpen}
+                  aria-haspopup="listbox"
+                  onClick={() => {
+                    setModelMenuOpen((o) => {
+                      const next = !o
+                      if (next) setModelSearch("")
+                      return next
+                    })
+                  }}
+                  className={cn(
+                    "flex h-11 w-full items-center gap-2 rounded-xl border border-border/80 bg-background/50 px-3 text-left text-base shadow-sm outline-none transition-[border-color,box-shadow] duration-200",
+                    "focus-visible:border-primary/50 focus-visible:ring-[3px] focus-visible:ring-primary/25",
+                    "dark:bg-black/25 md:h-12"
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {selectedModelLabel}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "size-4 shrink-0 opacity-50 transition-transform",
+                      modelMenuOpen && "rotate-180"
+                    )}
+                  />
+                </button>
+                {modelMenuOpen ? (
+                  <div
+                    role="listbox"
+                    className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border/80 bg-background shadow-lg dark:bg-black/90"
+                  >
+                    <Input
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      placeholder="Search by name or id…"
+                      className="h-10 rounded-none border-0 border-b border-border/60 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
+                      autoFocus
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    <ScrollArea className="h-[min(18rem,50vh)]">
+                      <div className="p-1">
+                        {filteredOpenRouterModels.length === 0 ? (
+                          <p className="px-2 py-4 text-center text-sm text-muted-foreground">
+                            No matches
+                          </p>
+                        ) : (
+                          filteredOpenRouterModels.map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              role="option"
+                              aria-selected={m.id === chatModelId}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setChatModelId(m.id)
+                                setModelMenuOpen(false)
+                                setModelSearch("")
+                              }}
+                              className={cn(
+                                "flex w-full flex-col gap-0.5 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-muted/80",
+                                m.id === chatModelId && "bg-muted/60"
+                              )}
+                            >
+                              <span className="truncate font-medium">
+                                {m.name}
+                              </span>
+                              <span className="truncate font-mono text-xs text-muted-foreground">
+                                {m.id}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <Input
                 id="chat-model"
@@ -933,6 +1036,18 @@ console.log(text)`
                 <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>.
               </p>
             )}
+            <p className="text-xs leading-relaxed text-muted-foreground/90">
+              OpenRouter may close the stream with{" "}
+              <span className="font-medium text-foreground/80">
+                Upstream idle timeout exceeded
+              </span>{" "}
+              when the model runs browser tools for a long stretch without emitting
+              tokens. Hermes often retries automatically; if failures persist, use a
+              snappier model, shorten the crawl, or point Hermes at a provider without
+              that idle limit. Optional env{" "}
+              <code className="rounded bg-muted/50 px-1">HERMES_MAX_TOKENS</code> can
+              help some setups.
+            </p>
           </div>
 
           <div className="flex items-start gap-3 rounded-xl border border-border/50 bg-muted/15 px-3 py-3 dark:bg-white/[0.04]">

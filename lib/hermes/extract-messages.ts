@@ -45,11 +45,15 @@ export function chatBodyForExtract(
   },
   options?: { stream?: boolean; model?: string }
 ) {
-  const { model: envModel } = getHermesServerConfig()
+  const { model: envModel, maxTokens } = getHermesServerConfig()
   const model = options?.model?.trim() ? options.model.trim() : envModel
-  return {
+  const body: Record<string, unknown> = {
     model,
     messages: buildExtractionMessages(payload),
     stream: options?.stream ?? false,
   }
+  if (maxTokens != null) {
+    body.max_tokens = maxTokens
+  }
+  return body
 }

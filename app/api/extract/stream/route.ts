@@ -16,6 +16,9 @@ import { getOxylabsWebUnblockerHeaderPairs } from "@/lib/proxy/oxylabs-hermes-he
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
+/** Vercel: allow long SSE extractions (browser tools + streaming). @see https://vercel.com/docs/functions/configuring-functions/duration */
+export const maxDuration = 3600
+
 export async function POST(req: Request) {
   let body: unknown
   try {

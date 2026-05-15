@@ -35,7 +35,7 @@ export async function GET() {
     }
 
     const json = (await res.json()) as {
-      data?: { id: string; name?: string }[]
+      data?: { id: string; name?: string; created?: number }[]
     }
     const raw = Array.isArray(json.data) ? json.data : []
     const models = raw
@@ -46,8 +46,14 @@ export async function GET() {
           typeof m.name === "string" && m.name.trim()
             ? m.name.trim()
             : m.id,
+        created:
+          typeof m.created === "number" && Number.isFinite(m.created)
+            ? m.created
+            : 0,
       }))
-      .sort((a, b) => a.id.localeCompare(b.id))
+      .sort((a, b) =>
+        b.created !== a.created ? b.created - a.created : a.id.localeCompare(b.id)
+      )
 
     return NextResponse.json({
       ok: true,
