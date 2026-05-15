@@ -379,7 +379,11 @@ export function ExtractDashboard() {
   const [prompt, setPrompt] = React.useState("")
   const [headersFile, setHeadersFile] = React.useState<File | null>(null)
   const [catalogModels, setCatalogModels] = React.useState<
-    { id: string; name: string }[]
+    {
+      id: string
+      name: string
+      pricingSummary?: string | null
+    }[]
   >([])
   const [chatModelId, setChatModelId] = React.useState("")
   const [catalogModelsHint, setCatalogModelsHint] = React.useState<
@@ -457,7 +461,9 @@ export function ExtractDashboard() {
     if (!q) return catalogModels
     return catalogModels.filter(
       (m) =>
-        m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+        m.id.toLowerCase().includes(q) ||
+        m.name.toLowerCase().includes(q) ||
+        (m.pricingSummary?.toLowerCase().includes(q) ?? false)
     )
   }, [catalogModels, modelSearch])
 
@@ -488,10 +494,14 @@ export function ExtractDashboard() {
     let cancelled = false
     void (async () => {
       try {
-        const r = await fetch("/api/hermes/chat-models")
+        const r = await fetch("/api/openrouter/models")
         const j = (await r.json()) as {
           ok?: boolean
-          models?: { id: string; name: string }[]
+          models?: {
+            id: string
+            name: string
+            pricingSummary?: string | null
+          }[]
           defaultModel?: string
           error?: string
           detail?: string
@@ -505,7 +515,7 @@ export function ExtractDashboard() {
           const hint = [j.error, j.detail].filter(Boolean).join(" — ")
           setCatalogModelsHint(
             hint ||
-              "Could not load Hermes /v1/models. Confirm API_SERVER_ENABLED and hermes gateway per the Hermes API server docs; you can still type a model id below."
+              "Could not load OpenRouter models. Check network or set OPENROUTER_API_KEY; you can still type a model id manually."
           )
         } else {
           setCatalogModelsHint(null)
@@ -518,7 +528,7 @@ export function ExtractDashboard() {
       } catch (e) {
         if (!cancelled) {
           setCatalogModelsHint(
-            e instanceof Error ? e.message : "Failed to load Hermes models."
+            e instanceof Error ? e.message : "Failed to load OpenRouter models."
           )
           setCatalogModels([])
         }
@@ -1105,7 +1115,7 @@ console.log(text)`
               }
               className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
-              Model (Hermes /v1/models)
+              Model (OpenRouter)
             </Label>
             {catalogModels.length > 0 ? (
               <div ref={modelPickerRef} className="relative">
@@ -1137,6 +1147,15 @@ console.log(text)`
                     )}
                   />
                 </button>
+                {(() => {
+                  const p = catalogModels.find((x) => x.id === chatModelId)
+                    ?.pricingSummary
+                  return p ? (
+                    <p className="mt-1 text-[0.65rem] leading-snug text-muted-foreground tabular-nums">
+                      {p}
+                    </p>
+                  ) : null
+                })()}
                 {modelMenuOpen ? (
                   <div
                     role="listbox"
@@ -1180,6 +1199,11 @@ console.log(text)`
                               <span className="truncate font-mono text-xs text-muted-foreground">
                                 {m.id}
                               </span>
+                              {m.pricingSummary ? (
+                                <span className="text-[0.65rem] leading-snug text-muted-foreground/90 tabular-nums">
+                                  {m.pricingSummary}
+                                </span>
+                              ) : null}
                             </button>
                           ))
                         )}
@@ -1193,7 +1217,7 @@ console.log(text)`
                 id="chat-model"
                 value={chatModelId}
                 onChange={(e) => setChatModelId(e.target.value)}
-                placeholder="e.g. hermes-agent (from GET /v1/models)"
+                placeholder="e.g. anthropic/claude-opus-4.7-fast"
                 className="h-11 rounded-xl border-border/80 bg-background/50 text-base shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-12 md:text-[0.95rem]"
               />
             )}
@@ -1203,26 +1227,40 @@ console.log(text)`
               </p>
             ) : (
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Uses the same{" "}
-                <code className="rounded bg-muted/50 px-1">model</code> string
-                as{" "}
+                Model{" "}
+                <code className="rounded bg-muted/50 px-1">id</code> from{" "}
+                <a
+                  href="https://openrouter.ai/api/v1/models"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  OpenRouter models
+                </a>
+                , passed as{" "}
+                <code className="rounded bg-muted/50 px-1">model</code> on{" "}
                 <a
                   href="https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server"
                   target="_blank"
                   rel="noreferrer"
                   className="font-medium text-primary underline-offset-4 hover:underline"
                 >
-                  Hermes API server
+                  Hermes
                 </a>{" "}
-                <code className="rounded bg-muted/50 px-1">POST /v1/chat/completions</code>: ids
-                come from{" "}
-                <code className="rounded bg-muted/50 px-1">GET /v1/models</code>{" "}
-                (e.g. <code className="rounded bg-muted/50 px-1">hermes-agent</code>{" "}
-                or your profile name). The docs note the field is largely cosmetic
-                for routing — the real LLM is configured in Hermes&apos;s{" "}
-                <code className="rounded bg-muted/50 px-1">config.yaml</code>.
-                Server default:{" "}
-                <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>.
+                <code className="rounded bg-muted/50 px-1">
+                  POST /v1/chat/completions
+                </code>{" "}
+                (same shape as the curl hello example). Pricing shown is list price
+                from OpenRouter (USD per M tokens, derived from API fields). Default
+                id:{" "}
+                <code className="rounded bg-muted/50 px-1">
+                  anthropic/claude-opus-4.7-fast
+                </code>{" "}
+                when present; override with env{" "}
+                <code className="rounded bg-muted/50 px-1">
+                  OPENROUTER_DEFAULT_MODEL
+                </code>
+                .
               </p>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground/90">

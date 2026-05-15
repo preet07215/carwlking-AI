@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getHermesServerConfig } from "@/lib/hermes/config"
+import { normalizeOpenRouterModels } from "@/lib/openrouter/model-catalog"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -8,11 +9,16 @@ export const runtime = "nodejs"
 const OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
 
 /**
- * Lists models from OpenRouter (optional; not used by the Extract flow — that uses Hermes /v1/models).
+ * OpenRouter model catalog for Extract: `id` is sent as Hermes `POST /v1/chat/completions` `model`
+ * when your gateway routes to OpenRouter (or accepts that id).
  * Optional OPENROUTER_API_KEY improves rate limits.
  */
 export async function GET() {
-  const { model: defaultModel } = getHermesServerConfig()
+  const { model: hermesFallback } = getHermesServerConfig()
+  const preferredId =
+    process.env.OPENROUTER_DEFAULT_MODEL?.trim() ||
+    "anthropic/claude-opus-4.7-fast"
+
   const key = process.env.OPENROUTER_API_KEY?.trim()
   const headers: Record<string, string> = { Accept: "application/json" }
   if (key) headers.Authorization = `Bearer ${key}`
@@ -29,42 +35,31 @@ export async function GET() {
           ok: false,
           error: `OpenRouter models request failed (${res.status})`,
           detail: t.slice(0, 800),
-          defaultModel,
+          defaultModel: hermesFallback,
+          models: [],
         },
         { status: 502 }
       )
     }
 
-    const json = (await res.json()) as {
-      data?: { id: string; name?: string; created?: number }[]
-    }
-    const raw = Array.isArray(json.data) ? json.data : []
-    const models = raw
-      .filter((m) => m && typeof m.id === "string" && m.id.length > 0)
-      .map((m) => ({
-        id: m.id,
-        name:
-          typeof m.name === "string" && m.name.trim()
-            ? m.name.trim()
-            : m.id,
-        created:
-          typeof m.created === "number" && Number.isFinite(m.created)
-            ? m.created
-            : 0,
-      }))
-      .sort((a, b) =>
-        b.created !== a.created ? b.created - a.created : a.id.localeCompare(b.id)
-      )
+    const json = (await res.json()) as unknown
+    const models = normalizeOpenRouterModels(json)
+
+    const defaultModel =
+      models.some((m) => m.id === preferredId) ? preferredId
+      : models.some((m) => m.id === hermesFallback) ? hermesFallback
+      : (models[0]?.id ?? hermesFallback)
 
     return NextResponse.json({
       ok: true,
       models,
       defaultModel,
+      source: "https://openrouter.ai/api/v1/models",
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error"
     return NextResponse.json(
-      { ok: false, error: msg, defaultModel },
+      { ok: false, error: msg, defaultModel: hermesFallback, models: [] },
       { status: 502 }
     )
   }

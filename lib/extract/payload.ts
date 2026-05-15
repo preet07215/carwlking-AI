@@ -4,7 +4,7 @@ export type ExtractPayload = {
   targetUrl: string
   prompt: string
   headersSample?: string
-  /** Model id from Hermes GET /v1/models (e.g. hermes-agent, profile name). */
+  /** OpenRouter model id (https://openrouter.ai/api/v1/models → `id`), sent as chat `model` to Hermes. */
   model?: string
   /** When true, server adds Oxylabs Web Unblocker proxy URLs as headers to Hermes. */
   useProxy?: boolean
