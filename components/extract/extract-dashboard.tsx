@@ -37,6 +37,11 @@ import { HermesServerOfflineDialog } from "@/components/extract/hermes-offline-d
 import { ExtractStreamProgress } from "@/components/extract/extract-stream-panel"
 import { JsonTreeView } from "@/components/extract/json-tree-view"
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
   consumeChatCompletionSse,
   type StreamToolEntry,
 } from "@/lib/extract/sse-client"
@@ -122,11 +127,30 @@ function statusBadge(status: ExtractionStatus) {
   return map[status]
 }
 
-function truncatePrompt(text: string | undefined, max = 96): string | null {
-  if (!text?.trim()) return null
-  const t = text.trim()
-  if (t.length <= max) return t
-  return `${t.slice(0, max - 1)}…`
+function DetailRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string
+  value: React.ReactNode
+  mono?: boolean
+}) {
+  return (
+    <div className="grid gap-0.5 border-b border-border/40 py-2 last:border-0 sm:grid-cols-[minmax(0,7.5rem)_1fr] sm:gap-x-4">
+      <dt className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          "min-w-0 text-sm leading-snug text-foreground",
+          mono && "break-all font-mono text-xs"
+        )}
+      >
+        {value}
+      </dd>
+    </div>
+  )
 }
 
 function RecentExtractions({
@@ -179,9 +203,7 @@ function RecentExtractions({
 
   return (
     <div className="space-y-3">
-      {records.map((row, i) => {
-        const promptPreview = truncatePrompt(row.prompt)
-        return (
+      {records.map((row, i) => (
         <motion.div
           key={row.id}
           initial={reduceMotion ? false : { opacity: 0, y: 10 }}
@@ -193,193 +215,152 @@ function RecentExtractions({
             <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
               <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-fuchsia-500/5" />
             </div>
-            {/* Desktop / tablet row */}
-            <div className="relative hidden gap-4 p-4 sm:grid sm:grid-cols-12 sm:items-center sm:p-5">
-              <div className="col-span-3 flex items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="rounded-lg border-primary/25 bg-primary/10 font-medium text-primary"
-                >
-                  extract
-                </Badge>
-              </div>
-              <div className="col-span-5 min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {row.url}
-                </p>
-                {promptPreview ? (
-                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                    {promptPreview}
-                  </p>
-                ) : null}
-                {row.modelId || row.useProxy || row.pricingSummary ? (
-                  <p className="mt-0.5 flex flex-wrap items-center gap-2">
-                    {row.modelId ? (
-                      <code className="max-w-full truncate rounded bg-muted/60 px-1 py-0.5 font-mono text-[0.65rem] text-muted-foreground">
-                        {row.modelId}
-                      </code>
-                    ) : null}
-                    {row.useProxy ? (
-                      <Badge
-                        variant="outline"
-                        className="h-5 rounded-md text-[0.65rem] font-normal"
-                      >
-                        Proxy
-                      </Badge>
-                    ) : null}
-                    {row.pricingSummary ? (
-                      <span className="max-w-full text-[0.65rem] leading-snug text-muted-foreground tabular-nums">
-                        {row.pricingSummary}
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {formatRelativeTime(row.createdAt)}
-                </p>
-              </div>
-              <div className="col-span-2 text-sm tabular-nums text-muted-foreground">
-                {row.status === "running" ? "—" : `${row.durationMs}ms`}
-              </div>
-              <div className="col-span-2 flex justify-end gap-1">
-                {row.status === "running" &&
-                row.id === activeStreamingId ? (
-                  <Button
-                    size="icon-sm"
-                    variant="destructive"
-                    className="rounded-xl"
-                    aria-label="Stop extraction"
-                    onClick={onStopStreaming}
-                  >
-                    <Square className="size-3.5 fill-current" />
-                  </Button>
-                ) : null}
-                <Badge
-                  variant="outline"
-                  className={cn("rounded-lg capitalize", statusBadge(row.status))}
-                >
-                  {row.status}
-                </Badge>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="rounded-xl text-muted-foreground hover:text-destructive disabled:opacity-40"
-                  aria-label="Remove from list"
-                  disabled={removeBusyId === row.id}
-                  onClick={() => onRemove(row.id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="rounded-xl text-muted-foreground hover:text-foreground disabled:opacity-40"
-                  aria-label="Download result"
-                  disabled={
-                    !row.resultText || !jsonTextForDownload(row.resultText)
-                  }
-                  onClick={() => downloadRow(row)}
-                >
-                  <Download className="size-4" />
-                </Button>
-              </div>
-            </div>
-            {/* Mobile stacked */}
-            <div className="relative space-y-3 p-4 sm:hidden">
-              <div className="flex items-start justify-between gap-2">
-                <Badge
-                  variant="outline"
-                  className="rounded-lg border-primary/25 bg-primary/10 font-medium text-primary"
-                >
-                  extract
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn("rounded-lg capitalize", statusBadge(row.status))}
-                >
-                  {row.status}
-                </Badge>
-              </div>
-              <p className="break-all text-sm font-medium leading-snug text-foreground">
-                {row.url}
-              </p>
-              {promptPreview ? (
-                <p className="line-clamp-3 text-xs leading-snug text-muted-foreground">
-                  {promptPreview}
-                </p>
-              ) : null}
-              {row.modelId || row.useProxy || row.pricingSummary ? (
+            <div className="relative space-y-3 p-4 sm:space-y-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
-                  {row.modelId ? (
-                    <code className="max-w-full truncate rounded bg-muted/60 px-1 py-0.5 font-mono text-[0.65rem] text-muted-foreground">
-                      {row.modelId}
-                    </code>
-                  ) : null}
+                  <Badge
+                    variant="outline"
+                    className="rounded-lg border-primary/25 bg-primary/10 font-medium text-primary"
+                  >
+                    extract
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "rounded-lg capitalize",
+                      statusBadge(row.status)
+                    )}
+                  >
+                    {row.status}
+                  </Badge>
                   {row.useProxy ? (
                     <Badge
                       variant="outline"
-                      className="h-5 rounded-md text-[0.65rem] font-normal"
+                      className="h-5 rounded-md border-amber-500/30 bg-amber-500/10 text-[0.65rem] font-normal text-amber-900 dark:text-amber-200"
                     >
-                      Proxy
+                      Web unblocker proxy
                     </Badge>
-                  ) : null}
-                  {row.pricingSummary ? (
-                    <span className="max-w-full text-[0.65rem] leading-snug text-muted-foreground tabular-nums">
-                      {row.pricingSummary}
-                    </span>
-                  ) : null}
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="h-5 rounded-md text-[0.65rem] font-normal text-muted-foreground"
+                    >
+                      No proxy
+                    </Badge>
+                  )}
                 </div>
-              ) : null}
-              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span>{formatRelativeTime(row.createdAt)}</span>
-                <span className="tabular-nums">
-                  {row.status === "running" ? "—" : `${row.durationMs}ms`}
-                </span>
-              </div>
-              <Separator />
-              <div className="flex flex-wrap justify-end gap-2">
-                {row.status === "running" &&
-                row.id === activeStreamingId ? (
+                <div className="flex flex-wrap justify-end gap-1 sm:shrink-0">
+                  {row.status === "running" &&
+                  row.id === activeStreamingId ? (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="rounded-xl gap-1.5"
+                      onClick={onStopStreaming}
+                    >
+                      <Square className="size-3.5 fill-current" />
+                      Stop
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
-                    variant="destructive"
-                    className="rounded-xl"
-                    onClick={onStopStreaming}
+                    variant="outline"
+                    className="rounded-xl disabled:opacity-40"
+                    aria-label="Remove from list"
+                    disabled={removeBusyId === row.id}
+                    onClick={() => onRemove(row.id)}
                   >
-                    <Square className="size-4 fill-current" />
-                    Stop
+                    <Trash2 className="size-4" />
+                    Remove
                   </Button>
-                ) : null}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-xl disabled:opacity-40"
-                  aria-label="Remove from list"
-                  disabled={removeBusyId === row.id}
-                  onClick={() => onRemove(row.id)}
-                >
-                  <Trash2 className="size-4" />
-                  Remove
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-xl disabled:opacity-40"
-                  aria-label="Download result"
-                  disabled={
-                    !row.resultText || !jsonTextForDownload(row.resultText)
-                  }
-                  onClick={() => downloadRow(row)}
-                >
-                  <Download className="size-4" />
-                  Download
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl disabled:opacity-40"
+                    aria-label="Download result"
+                    disabled={
+                      !row.resultText || !jsonTextForDownload(row.resultText)
+                    }
+                    onClick={() => downloadRow(row)}
+                  >
+                    <Download className="size-4" />
+                    Download
+                  </Button>
+                </div>
               </div>
+
+              <div className="rounded-xl border border-border/60 bg-background/50 dark:bg-black/20">
+                <div className="divide-y divide-border/50 px-3 sm:px-4">
+                  <DetailRow
+                    label="Run ID"
+                    value={row.id}
+                    mono
+                  />
+                  <DetailRow label="Target URL" value={row.url} mono />
+                  <DetailRow
+                    label="Created"
+                    value={
+                      <>
+                        {new Date(row.createdAt).toLocaleString(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "medium",
+                        })}
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {formatRelativeTime(row.createdAt)}
+                        </span>
+                      </>
+                    }
+                  />
+                  <DetailRow
+                    label="Duration"
+                    value={
+                      row.status === "running"
+                        ? "—"
+                        : `${row.durationMs.toLocaleString()} ms`
+                    }
+                  />
+                  <DetailRow
+                    label="Model"
+                    value={row.modelId ?? "—"}
+                    mono
+                  />
+                  <DetailRow
+                    label="Pricing (list)"
+                    value={row.pricingSummary ?? "—"}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Prompt (full)
+                </p>
+                <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border/50 bg-muted/20 p-3 font-sans text-xs leading-relaxed text-foreground">
+                  {row.prompt?.trim() ? row.prompt : "—"}
+                </pre>
+              </div>
+
+              <Collapsible className="rounded-xl border border-border/60 bg-muted/10">
+                <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm font-medium outline-none transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring/50">
+                  <span>Result text</span>
+                  <span className="shrink-0 tabular-nums text-xs font-normal text-muted-foreground">
+                    {row.resultText
+                      ? `${row.resultText.length.toLocaleString()} chars`
+                      : "—"}
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="border-t border-border/50 p-3">
+                    <pre className="max-h-[min(320px,50vh)] overflow-auto whitespace-pre-wrap break-words font-mono text-[0.7rem] leading-relaxed text-foreground/95">
+                      {row.resultText ?? "—"}
+                    </pre>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           </GlassPanel>
         </motion.div>
-        )
-      })}
+      ))}
     </div>
   )
 }
@@ -1558,15 +1539,6 @@ console.log(text)`
             ) : null}
           </div>
         </div>
-        {/* column headers — desktop only */}
-        {displayRecords.length > 0 ? (
-          <div className="hidden px-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:grid sm:grid-cols-12 sm:gap-4">
-            <div className="col-span-3">Type</div>
-            <div className="col-span-5">Source</div>
-            <div className="col-span-2">Duration</div>
-            <div className="col-span-2 text-right">Actions</div>
-          </div>
-        ) : null}
         <RecentExtractions
           records={displayRecords}
           onRemove={removeRecord}
