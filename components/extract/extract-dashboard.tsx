@@ -1305,13 +1305,13 @@ console.log(text)`
                   POST /v1/chat/completions
                 </code>
                 . If none is selected, the server uses{" "}
-                <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>{" "}
-                (<code className="rounded bg-muted/50 px-1">hermes-agent</code> by
-                default). Set{" "}
+                <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>
+                , then{" "}
                 <code className="rounded bg-muted/50 px-1">
                   OPENROUTER_DEFAULT_MODEL
-                </code>{" "}
-                to prefer an OpenRouter id when it&apos;s in the merged list.
+                </code>
+                , then a built-in OpenRouter-style default. Set those env vars to
+                ids your Hermes gateway accepts.
               </p>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground/90">

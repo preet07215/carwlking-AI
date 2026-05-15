@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 
-import { getHermesServerConfig } from "@/lib/hermes/config"
+import {
+  DEFAULT_HERMES_CHAT_MODEL,
+  getHermesServerConfig,
+} from "@/lib/hermes/config"
 import { normalizeOpenRouterModels } from "@/lib/openrouter/model-catalog"
 
 export const dynamic = "force-dynamic"
@@ -17,7 +20,7 @@ export async function GET() {
   const { model: hermesFallback } = getHermesServerConfig()
   const preferredId =
     process.env.OPENROUTER_DEFAULT_MODEL?.trim() ||
-    "anthropic/claude-opus-4.7-fast"
+    DEFAULT_HERMES_CHAT_MODEL
 
   const key = process.env.OPENROUTER_API_KEY?.trim()
   const headers: Record<string, string> = { Accept: "application/json" }

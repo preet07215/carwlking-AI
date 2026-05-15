@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
 
 import { HermesUpstreamError, hermesModels } from "@/lib/hermes/client"
-import { getHermesServerConfig } from "@/lib/hermes/config"
+import {
+  DEFAULT_HERMES_CHAT_MODEL,
+  getHermesServerConfig,
+} from "@/lib/hermes/config"
 import { parseHermesModelsList } from "@/lib/hermes/parse-models-list"
 import { normalizeOpenRouterModels } from "@/lib/openrouter/model-catalog"
 
@@ -25,7 +28,7 @@ export async function GET() {
   const { model: hermesEnvDefault } = getHermesServerConfig()
   const openrouterPreferred =
     process.env.OPENROUTER_DEFAULT_MODEL?.trim() ||
-    "anthropic/claude-opus-4.7-fast"
+    DEFAULT_HERMES_CHAT_MODEL
 
   const hermesList: UnifiedCatalogModel[] = []
   let hermesError: string | null = null
