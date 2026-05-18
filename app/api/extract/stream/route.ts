@@ -6,7 +6,6 @@ import {
   formatGenericHermesFailure,
   isLikelyConnectionFailure,
 } from "@/lib/hermes/errors"
-import { logExtractModelDebug } from "@/lib/hermes/extract-model-debug"
 import { chatBodyForExtract } from "@/lib/hermes/extract-messages"
 import { getOxylabsWebUnblockerHeaderPairs } from "@/lib/proxy/oxylabs-hermes-headers"
 
@@ -44,11 +43,6 @@ export async function POST(req: Request) {
     { targetUrl, prompt, headersSample },
     { stream: true, model: modelOverride }
   )
-  logExtractModelDebug({
-    route: "POST /api/extract/stream",
-    requestModel: modelOverride,
-    payloadModel: String(chatPayload.model ?? ""),
-  })
 
   const proxyPairs = useProxy ? getOxylabsWebUnblockerHeaderPairs() : null
   if (useProxy && !proxyPairs) {
