@@ -91,12 +91,17 @@ export async function POST(req: Request) {
 
   if (!upstream.ok) {
     const text = await upstream.text()
+    const hint401 =
+      upstream.status === 401
+        ? "If this is OpenAI-style invalid_api_key: set HERMES_API_KEY to match Hermes API_SERVER_KEY, or fix the LLM provider key inside Hermes (e.g. OpenRouter) — not always this app’s env."
+        : undefined
     return NextResponse.json(
       {
         ok: false,
         error: "Hermes stream request failed",
         detail: text.slice(0, 8000),
         status: upstream.status,
+        ...(hint401 ? { hint: hint401 } : {}),
       },
       { status: 502 }
     )
