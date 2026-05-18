@@ -7,10 +7,8 @@ import {
   type Variants,
 } from "framer-motion"
 import {
-  ChevronDown,
   Copy,
   Download,
-  Info,
   Link2,
   Loader2,
   Sparkles,
@@ -25,7 +23,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import {
@@ -369,23 +366,7 @@ export function ExtractDashboard() {
   const [targetUrl, setTargetUrl] = React.useState("")
   const [prompt, setPrompt] = React.useState("")
   const [headersFile, setHeadersFile] = React.useState<File | null>(null)
-  const [catalogModels, setCatalogModels] = React.useState<
-    {
-      id: string
-      name: string
-      source?: "hermes" | "openrouter"
-      pricingSummary?: string | null
-    }[]
-  >([])
-  const [chatModelId, setChatModelId] = React.useState("")
-  const [catalogModelsHint, setCatalogModelsHint] = React.useState<
-    string | null
-  >(null)
-  const [modelMenuOpen, setModelMenuOpen] = React.useState(false)
-  const [modelSearch, setModelSearch] = React.useState("")
-  const modelPickerRef = React.useRef<HTMLDivElement | null>(null)
   const catalogDefaultModelRef = React.useRef<string>("")
-  const [useWebUnblockerProxy, setUseWebUnblockerProxy] = React.useState(false)
   const [liveRuns, setLiveRuns] = React.useState<ExtractionRecord[]>([])
   const [storedHistory, setStoredHistory] = React.useState<ExtractionRecord[]>(
     []
@@ -449,96 +430,21 @@ export function ExtractDashboard() {
     return () => clearInterval(id)
   }, [streamActive, streamStartedAt])
 
-  const filteredCatalogModels = React.useMemo(() => {
-    const q = modelSearch.trim().toLowerCase()
-    if (!q) return catalogModels
-    return catalogModels.filter(
-      (m) =>
-        m.id.toLowerCase().includes(q) ||
-        m.name.toLowerCase().includes(q) ||
-        (m.pricingSummary?.toLowerCase().includes(q) ?? false) ||
-        (m.source?.toLowerCase().includes(q) ?? false)
-    )
-  }, [catalogModels, modelSearch])
-
-  const selectedModelLabel = React.useMemo(() => {
-    const m = catalogModels.find((x) => x.id === chatModelId)
-    if (m) return m.name
-    return chatModelId.trim() || "Select model…"
-  }, [catalogModels, chatModelId])
-
-  React.useEffect(() => {
-    if (!modelMenuOpen) return
-    const onDoc = (e: MouseEvent) => {
-      if (modelPickerRef.current?.contains(e.target as Node)) return
-      setModelMenuOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setModelMenuOpen(false)
-    }
-    document.addEventListener("mousedown", onDoc)
-    document.addEventListener("keydown", onKey)
-    return () => {
-      document.removeEventListener("mousedown", onDoc)
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [modelMenuOpen])
-
   React.useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
         const r = await fetch("/api/extraction/catalog-models")
         const j = (await r.json()) as {
-          ok?: boolean
-          models?: {
-            id: string
-            name: string
-            source?: "hermes" | "openrouter"
-            pricingSummary?: string | null
-          }[]
+          models?: { id: string }[]
           defaultModel?: string
-          hints?: { hermesError?: string | null; openrouterError?: string | null }
         }
         if (cancelled) return
-
         const models = Array.isArray(j.models) ? j.models : []
-        setCatalogModels(models)
-
         const def = j.defaultModel ?? models[0]?.id ?? ""
         catalogDefaultModelRef.current = def
-
-        const partialWarns = [
-          j.hints?.hermesError
-            ? `Hermes catalog: ${j.hints.hermesError}`
-            : null,
-          j.hints?.openrouterError
-            ? `OpenRouter catalog: ${j.hints.openrouterError}`
-            : null,
-        ].filter(Boolean)
-
-        if (!r.ok || j.ok === false) {
-          setCatalogModelsHint(
-            partialWarns.join(" — ") ||
-              "Could not load full model catalog. Type a model id manually or check Hermes gateway and OpenRouter."
-          )
-        } else if (partialWarns.length > 0) {
-          setCatalogModelsHint(partialWarns.join(" — "))
-        } else {
-          setCatalogModelsHint(null)
-        }
-
-        setChatModelId((prev) => {
-          if (prev.trim()) return prev
-          return def
-        })
-      } catch (e) {
-        if (!cancelled) {
-          setCatalogModelsHint(
-            e instanceof Error ? e.message : "Failed to load model catalog."
-          )
-          setCatalogModels([])
-        }
+      } catch {
+        if (!cancelled) catalogDefaultModelRef.current = ""
       }
     })()
     return () => {
@@ -720,13 +626,8 @@ export function ExtractDashboard() {
     const started = Date.now()
     const id = crypto.randomUUID()
     const createdAt = new Date().toISOString()
-    const resolvedModel =
-      chatModelId.trim() || catalogDefaultModelRef.current.trim()
+    const resolvedModel = catalogDefaultModelRef.current.trim()
     const modelIdForRun = resolvedModel || undefined
-    const useProxyForRun = useWebUnblockerProxy
-    const pricingForRun =
-      catalogModels.find((m) => m.id === resolvedModel)?.pricingSummary ??
-      undefined
 
     setStreamEntries([
       {
@@ -747,8 +648,7 @@ export function ExtractDashboard() {
       createdAt,
       prompt: p,
       modelId: modelIdForRun,
-      useProxy: useProxyForRun,
-      pricingSummary: pricingForRun,
+      useProxy: false,
     })
     setStreamStartedAt(Date.now())
 
@@ -767,7 +667,6 @@ export function ExtractDashboard() {
           prompt: p,
           headersSample: headersSample || undefined,
           ...(resolvedModel ? { model: resolvedModel } : {}),
-          useProxy: useWebUnblockerProxy,
         }),
       })
 
@@ -797,8 +696,7 @@ export function ExtractDashboard() {
             createdAt,
             prompt: p,
             modelId: modelIdForRun,
-            useProxy: useProxyForRun,
-            pricingSummary: pricingForRun,
+            useProxy: false,
             resultText: "Cancelled by user.",
           })
           return
@@ -849,8 +747,7 @@ export function ExtractDashboard() {
           createdAt,
           prompt: p,
           modelId: modelIdForRun,
-          useProxy: useProxyForRun,
-          pricingSummary: pricingForRun,
+          useProxy: false,
           resultText: errText,
         })
         return
@@ -870,8 +767,7 @@ export function ExtractDashboard() {
             createdAt,
             prompt: p,
             modelId: modelIdForRun,
-            useProxy: useProxyForRun,
-            pricingSummary: pricingForRun,
+            useProxy: false,
             resultText: "Cancelled by user.",
           })
           return
@@ -890,8 +786,7 @@ export function ExtractDashboard() {
           createdAt,
           prompt: p,
           modelId: modelIdForRun,
-          useProxy: useProxyForRun,
-          pricingSummary: pricingForRun,
+          useProxy: false,
           resultText: errText,
         })
         return
@@ -925,8 +820,7 @@ export function ExtractDashboard() {
         createdAt,
         prompt: p,
         modelId: modelIdForRun,
-        useProxy: useProxyForRun,
-        pricingSummary: pricingForRun,
+        useProxy: false,
         resultText: acc,
       })
     } catch (e) {
@@ -956,8 +850,7 @@ export function ExtractDashboard() {
           createdAt,
           prompt: p,
           modelId: modelIdForRun,
-          useProxy: useProxyForRun,
-          pricingSummary: pricingForRun,
+          useProxy: false,
           resultText: "Cancelled by user.",
         })
         return
@@ -984,8 +877,7 @@ export function ExtractDashboard() {
         createdAt,
         prompt: p,
         modelId: modelIdForRun,
-        useProxy: useProxyForRun,
-        pricingSummary: pricingForRun,
+        useProxy: false,
         resultText: msg,
       })
     } finally {
@@ -998,16 +890,14 @@ export function ExtractDashboard() {
   async function handleGetCode() {
     setGetCodeBusy(true)
     try {
-      const resolvedExampleModel =
-        chatModelId.trim() || catalogDefaultModelRef.current.trim()
+      const resolvedExampleModel = catalogDefaultModelRef.current.trim()
       const example = {
         targetUrl: targetUrl.trim() || "https://example.com",
         prompt:
           prompt.trim() ||
           "Extract the main product title and price as JSON.",
         headersSample: "// optional: paste HAR / headers text",
-        model: resolvedExampleModel || "your-model-id",
-        useProxy: false,
+        ...(resolvedExampleModel ? { model: resolvedExampleModel } : {}),
       }
       const origin =
         typeof window !== "undefined" ? window.location.origin : ""
@@ -1144,231 +1034,17 @@ console.log(text)`
             onFileChange={setHeadersFile}
           />
 
-          <div className="space-y-2">
-            <div
-              className="flex gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:border-amber-400/25 dark:bg-amber-500/15 dark:text-amber-50/95"
-              role="note"
-            >
-              <Info
-                className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-200"
-                aria-hidden
-              />
-              <p>
-                <span className="font-medium">
-                  Hermes treats the JSON <code className="rounded bg-black/10 px-1 py-px dark:bg-black/30">model</code> field as cosmetic
-                </span>
-                — the LLM in use comes from{" "}
-                <span className="font-medium">Hermes server config</span>{" "}
-                (e.g. default / provider in your gateway), not from this picker. See{" "}
-                <a
-                  href="https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server#limitations"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium underline underline-offset-2"
-                >
-                  API Server → Limitations
-                </a>
-                . We still send <code className="rounded bg-black/10 px-1 py-px dark:bg-black/30">model</code> for OpenAI compatibility and session labels.
-              </p>
-            </div>
-            <Label
-              htmlFor={
-                catalogModels.length > 0 ? "chat-model-trigger" : "chat-model"
-              }
-              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Request <code className="font-mono text-[0.7rem] font-normal">model</code> (Hermes + OpenRouter reference)
-            </Label>
-            {catalogModels.length > 0 ? (
-              <div ref={modelPickerRef} className="relative">
-                <button
-                  type="button"
-                  id="chat-model-trigger"
-                  aria-expanded={modelMenuOpen}
-                  aria-haspopup="listbox"
-                  onClick={() => {
-                    setModelMenuOpen((o) => {
-                      const next = !o
-                      if (next) setModelSearch("")
-                      return next
-                    })
-                  }}
-                  className={cn(
-                    "flex h-11 w-full items-center gap-2 rounded-xl border border-border/80 bg-background/50 px-3 text-left text-base shadow-sm outline-none transition-[border-color,box-shadow] duration-200",
-                    "focus-visible:border-primary/50 focus-visible:ring-[3px] focus-visible:ring-primary/25",
-                    "dark:bg-black/25 md:h-12"
-                  )}
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    {selectedModelLabel}
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "size-4 shrink-0 opacity-50 transition-transform",
-                      modelMenuOpen && "rotate-180"
-                    )}
-                  />
-                </button>
-                {(() => {
-                  const p = catalogModels.find((x) => x.id === chatModelId)
-                    ?.pricingSummary
-                  return p ? (
-                    <p className="mt-1 text-[0.65rem] leading-snug text-muted-foreground tabular-nums">
-                      {p}
-                    </p>
-                  ) : null
-                })()}
-                {modelMenuOpen ? (
-                  <div
-                    role="listbox"
-                    className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border/80 bg-background shadow-lg dark:bg-black/90"
-                  >
-                    <Input
-                      value={modelSearch}
-                      onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder="Search by name or id…"
-                      className="h-10 rounded-none border-0 border-b border-border/60 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
-                      autoFocus
-                      onKeyDown={(e) => e.stopPropagation()}
-                    />
-                    <ScrollArea className="h-[min(18rem,50vh)]">
-                      <div className="p-1">
-                        {filteredCatalogModels.length === 0 ? (
-                          <p className="px-2 py-4 text-center text-sm text-muted-foreground">
-                            No matches
-                          </p>
-                        ) : (
-                          filteredCatalogModels.map((m) => (
-                            <button
-                              key={m.id}
-                              type="button"
-                              role="option"
-                              aria-selected={m.id === chatModelId}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                setChatModelId(m.id)
-                                setModelMenuOpen(false)
-                                setModelSearch("")
-                              }}
-                              className={cn(
-                                "flex w-full flex-col gap-0.5 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-muted/80",
-                                m.id === chatModelId && "bg-muted/60"
-                              )}
-                            >
-                              <span className="flex flex-wrap items-center gap-2">
-                                {m.source ? (
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      "h-5 shrink-0 rounded-md px-1.5 py-0 text-[0.6rem] font-normal uppercase tracking-wide",
-                                      m.source === "hermes"
-                                        ? "border-violet-500/30 bg-violet-500/10 text-violet-800 dark:text-violet-200"
-                                        : "border-sky-500/30 bg-sky-500/10 text-sky-900 dark:text-sky-200"
-                                    )}
-                                  >
-                                    {m.source}
-                                  </Badge>
-                                ) : null}
-                                <span className="truncate font-medium">
-                                  {m.name}
-                                </span>
-                              </span>
-                              <span className="truncate font-mono text-xs text-muted-foreground">
-                                {m.id}
-                              </span>
-                              {m.pricingSummary ? (
-                                <span className="text-[0.65rem] leading-snug text-muted-foreground/90 tabular-nums">
-                                  {m.pricingSummary}
-                                </span>
-                              ) : null}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <Input
-                id="chat-model"
-                value={chatModelId}
-                onChange={(e) => setChatModelId(e.target.value)}
-                placeholder="Cosmetic id — e.g. hermes-agent or GET /v1/models value"
-                className="h-11 rounded-xl border-border/80 bg-background/50 text-base shadow-sm transition-[border-color,box-shadow] duration-200 focus-visible:border-primary/50 focus-visible:ring-primary/25 dark:bg-black/25 md:h-12 md:text-[0.95rem]"
-              />
-            )}
-            {catalogModelsHint ? (
-              <p className="text-xs text-amber-700 dark:text-amber-200/90">
-                {catalogModelsHint}
-              </p>
-            ) : (
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                The list shows{" "}
-                <span className="font-medium text-foreground/85">Hermes</span>{" "}
-                <code className="rounded bg-muted/50 px-1">GET /v1/models</code>{" "}
-                first, then{" "}
-                <a
-                  href="https://openrouter.ai/api/v1/models"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  OpenRouter
-                </a>{" "}
-                (deduped) for naming and reference. The selected{" "}
-                <code className="rounded bg-muted/50 px-1">id</code> is sent as
-                JSON <code className="rounded bg-muted/50 px-1">model</code> on{" "}
-                <code className="rounded bg-muted/50 px-1">
-                  POST /v1/chat/completions
-                </code>
-                . If empty, this app uses{" "}
-                <code className="rounded bg-muted/50 px-1">HERMES_MODEL</code>,{" "}
-                then <code className="rounded bg-muted/50 px-1">
-                  OPENROUTER_DEFAULT_MODEL
-                </code>
-                , then <code className="rounded bg-muted/50 px-1">hermes-agent</code>
-                . To change the <span className="font-medium">actual</span> LLM,
-                edit Hermes gateway / profile configuration — not only this field.
-              </p>
-            )}
-            <p className="text-xs leading-relaxed text-muted-foreground/90">
-              Long browser-tool runs may hit upstream{" "}
-              <span className="font-medium text-foreground/80">
-                idle timeouts
-              </span>
-              . Hermes often retries; if failures persist, tune the provider or
-              timeouts on the Hermes gateway, shorten the crawl, or use a provider
-              without strict idle limits. Optional env{" "}
-              <code className="rounded bg-muted/50 px-1">HERMES_MAX_TOKENS</code>{" "}
-              can help some setups.
-            </p>
-          </div>
-
-          <div className="flex items-start gap-3 rounded-xl border border-border/50 bg-muted/15 px-3 py-3 dark:bg-white/[0.04]">
-            <input
-              id="use-web-unblocker-proxy"
-              type="checkbox"
-              checked={useWebUnblockerProxy}
-              onChange={(e) => setUseWebUnblockerProxy(e.target.checked)}
-              className="mt-1 size-4 shrink-0 rounded border-border text-primary accent-primary"
-            />
-            <Label
-              htmlFor="use-web-unblocker-proxy"
-              className="cursor-pointer text-sm font-medium leading-snug text-foreground"
-            >
-              Use web unblocker proxy for crawling
-              <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                Sends Oxylabs Web Unblocker proxy URLs to Hermes on this request
-                (server env{" "}
-                <code className="rounded bg-muted/50 px-1 text-[0.7rem]">
-                  OXYLABS_WEB_UNBLOCKER_*
-                </code>
-                ). No extra fields—enable only if your gateway applies proxies when
-                pages block or return 403.
-              </span>
-            </Label>
-          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground/90">
+            Long browser-tool runs may hit upstream{" "}
+            <span className="font-medium text-foreground/80">
+              idle timeouts
+            </span>
+            . Hermes often retries; if failures persist, tune the provider or
+            timeouts on the Hermes gateway, shorten the crawl, or use a provider
+            without strict idle limits. Optional env{" "}
+            <code className="rounded bg-muted/50 px-1">HERMES_MAX_TOKENS</code>{" "}
+            can help some setups.
+          </p>
 
           <div className="space-y-2">
             <Label
