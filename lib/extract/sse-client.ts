@@ -1,3 +1,5 @@
+import { randomUuid } from "@/lib/utils"
+
 export type StreamToolEntry = {
   id: string
   at: number
@@ -77,7 +79,7 @@ export async function consumeChatCompletionSse(
   const reader = response.body?.getReader()
   if (!reader) {
     onStructured?.({
-      id: crypto.randomUUID(),
+      id: randomUuid(),
       at: Date.now(),
       kind: "error",
       title: "No response body",
@@ -111,7 +113,7 @@ export async function consumeChatCompletionSse(
       /* keep raw */
     }
     onStructured?.({
-      id: crypto.randomUUID(),
+      id: randomUuid(),
       at: Date.now(),
       kind: "tool",
       title: "Tool / agent progress",
@@ -133,7 +135,7 @@ export async function consumeChatCompletionSse(
 
     if (data === "[DONE]") {
       onStructured?.({
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         at: Date.now(),
         kind: "done",
         title: "Stream complete",
@@ -164,7 +166,7 @@ export async function consumeChatCompletionSse(
     } catch {
       if (eventName) {
         onStructured?.({
-          id: crypto.randomUUID(),
+          id: randomUuid(),
           at: Date.now(),
           kind: "tool",
           title: `SSE: ${eventName}`,

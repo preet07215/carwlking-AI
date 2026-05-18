@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { cn } from "@/lib/utils"
+import { cn, randomUuid } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import {
   type ExtractionRecord,
@@ -624,14 +624,14 @@ export function ExtractDashboard() {
     }
 
     const started = Date.now()
-    const id = crypto.randomUUID()
+    const id = randomUuid()
     const createdAt = new Date().toISOString()
     const resolvedModel = catalogDefaultModelRef.current.trim()
     const modelIdForRun = resolvedModel || undefined
 
     setStreamEntries([
       {
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         at: Date.now(),
         kind: "connect",
         title: "Opening SSE stream",
@@ -680,7 +680,7 @@ export function ExtractDashboard() {
           setStreamEntries((prev) => [
             ...prev,
             {
-              id: crypto.randomUUID(),
+              id: randomUuid(),
               at: Date.now(),
               kind: "error",
               title: "Stopped",
@@ -731,7 +731,7 @@ export function ExtractDashboard() {
         setStreamEntries((prev) => [
           ...prev,
           {
-            id: crypto.randomUUID(),
+            id: randomUuid(),
             at: Date.now(),
             kind: "error",
             title: "Stream aborted",
@@ -834,7 +834,7 @@ export function ExtractDashboard() {
         setStreamEntries((prev) => [
           ...prev,
           {
-            id: crypto.randomUUID(),
+            id: randomUuid(),
             at: Date.now(),
             kind: "error",
             title: "Stopped",
@@ -861,7 +861,7 @@ export function ExtractDashboard() {
       setStreamEntries((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: randomUuid(),
           at: Date.now(),
           kind: "error",
           title: "Client stream error",
