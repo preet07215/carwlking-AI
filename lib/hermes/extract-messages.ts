@@ -43,15 +43,16 @@ export function chatBodyForExtract(
     prompt: string
     headersSample?: string
   },
-  options?: { stream?: boolean; model?: string }
+  opts?: { stream?: boolean; model?: string }
 ) {
   const { model: envModel, maxTokens } = getHermesServerConfig()
-  // Hermes accepts `model` but uses server-configured LLM (API docs: field is cosmetic).
-  const model = options?.model?.trim() ? options.model.trim() : envModel
+  // Per-request model when provided; else HERMES_MODEL / OPENROUTER_DEFAULT_MODEL / default.
+  // Hermes may still use a server-configured LLM regardless of this field (see API docs).
+  const model = opts?.model?.trim() || envModel
   const body: Record<string, unknown> = {
     model,
     messages: buildExtractionMessages(payload),
-    stream: options?.stream ?? false,
+    stream: opts?.stream ?? false,
   }
   if (maxTokens != null) {
     body.max_tokens = maxTokens

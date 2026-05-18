@@ -6,6 +6,7 @@ import {
   hermesChatCompletion,
 } from "@/lib/hermes/client"
 import { formatGenericHermesFailure } from "@/lib/hermes/errors"
+import { logExtractModelDebug } from "@/lib/hermes/extract-model-debug"
 import { chatBodyForExtract } from "@/lib/hermes/extract-messages"
 import { getOxylabsWebUnblockerHeaderPairs } from "@/lib/proxy/oxylabs-hermes-headers"
 
@@ -74,6 +75,11 @@ export async function POST(req: Request) {
       },
       { stream: false, model: modelOverride }
     )
+    logExtractModelDebug({
+      route: "POST /api/extract",
+      requestModel: modelOverride,
+      payloadModel: String(chatPayload.model ?? ""),
+    })
     const raw = await hermesChatCompletion(chatPayload, {
       extraHeaders: proxyPairs ?? undefined,
     })
