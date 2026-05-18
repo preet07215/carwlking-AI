@@ -37,7 +37,7 @@ export function formatHermesConnectionHelp(
   const hint = [
     `Trying: ${urlAttempted} — HERMES_BASE_URL is ${origin}`,
     code ? `OS error code: ${code}` : null,
-    "1) In Hermes ~/.hermes/.env: API_SERVER_ENABLED=true and API_SERVER_KEY=… (match HERMES_API_KEY in .env.local)",
+    "1) Hermes: API_SERVER_ENABLED=true; if you use API_SERVER_KEY, set the same value as HERMES_API_KEY in .env.local (optional if your gateway has no key)",
     "2) Run: hermes gateway — expect [API Server] listening on http://127.0.0.1:8642",
     "3) Restart Next.js (npm run dev) after editing .env.local",
   ]

@@ -35,7 +35,9 @@ async function hermesAuthFetch(
       : `${apiV1}${path.startsWith("/") ? path : `/${path}`}`
 
   const headers = new Headers(init?.headers)
-  headers.set("Authorization", `Bearer ${apiKey}`)
+  if (apiKey) {
+    headers.set("Authorization", `Bearer ${apiKey}`)
+  }
   if (init?.extraHeaders) {
     for (const [k, v] of Object.entries(init.extraHeaders)) {
       headers.set(k, v)

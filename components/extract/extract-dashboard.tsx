@@ -721,7 +721,7 @@ export function ExtractDashboard() {
           setHermesStatus("error")
           setHermesHelp(
             errText ||
-              "Hermes unreachable. Start the gateway and match HERMES_API_KEY."
+              "Hermes unreachable. Start the gateway and check HERMES_BASE_URL (set HERMES_API_KEY only if your Hermes uses API_SERVER_KEY)."
           )
           setOfflineModalOpen(true)
         }

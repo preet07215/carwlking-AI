@@ -57,11 +57,11 @@ export async function POST(req: Request) {
   }
 
   const forwardHeaders: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
     Accept: "text/event-stream",
     ...(proxyPairs ?? {}),
   }
+  if (apiKey) forwardHeaders.Authorization = `Bearer ${apiKey}`
 
   let upstream: Response
   try {

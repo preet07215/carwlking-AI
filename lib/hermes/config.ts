@@ -22,7 +22,8 @@ export function getHermesServerConfig() {
   const origin = (
     process.env.HERMES_BASE_URL ?? "http://127.0.0.1:8642"
   ).replace(/\/$/, "")
-  const apiKey = process.env.HERMES_API_KEY ?? "change-me-local-dev"
+  /** Optional. Omitted from Hermes requests when unset (typical local gateway without API_SERVER_KEY). */
+  const apiKey = process.env.HERMES_API_KEY?.trim() ?? ""
   const model =
     process.env.HERMES_MODEL?.trim() ||
     process.env.OPENROUTER_DEFAULT_MODEL?.trim() ||
