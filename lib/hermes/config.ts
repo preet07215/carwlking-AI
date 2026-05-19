@@ -18,6 +18,20 @@ function optionalMaxTokens(raw: string | undefined): number | undefined {
   return n
 }
 
+/**
+ * When both paths are set, extraction system prompt tells the agent to write full data
+ * to these files and reply with only a small completion JSON (see extract-messages).
+ */
+export function getExtractionOutputManifestPaths(): {
+  json: string
+  csv: string
+} | null {
+  const json = process.env.EXTRACTION_OUTPUT_JSON_FILE?.trim()
+  const csv = process.env.EXTRACTION_OUTPUT_CSV_FILE?.trim()
+  if (!json || !csv) return null
+  return { json, csv }
+}
+
 export function getHermesServerConfig() {
   const origin = (
     process.env.HERMES_BASE_URL ?? "http://127.0.0.1:8642"

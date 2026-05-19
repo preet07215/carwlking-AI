@@ -1,4 +1,25 @@
-import { getHermesServerConfig } from "@/lib/hermes/config"
+import {
+  getExtractionOutputManifestPaths,
+  getHermesServerConfig,
+} from "@/lib/hermes/config"
+
+function fileManifestInstructions(
+  paths: { json: string; csv: string } | null
+): string {
+  if (!paths) return ""
+
+  const { json, csv } = paths
+  return `
+
+## Output delivery (mandatory for this run)
+- Do NOT print large datasets or full JSON inline in the chat.
+- Save the full structured output directly to files on the agent host using your file tools:
+  - JSON: ${json}
+  - CSV: ${csv}
+- After both files are saved, your FINAL assistant message MUST be exactly one JSON object and nothing else (no markdown fences, no commentary). Shape:
+  {"status":"completed","json_file":"${json}","csv_file":"${csv}","total_categories":<integer>}
+- Set total_categories to the correct count (e.g. number of categories or rows, per the extraction task). Never echo the full dataset in chat — only this small JSON object.`
+}
 
 export function buildExtractionMessages(payload: {
   targetUrl: string
@@ -11,13 +32,19 @@ export function buildExtractionMessages(payload: {
     headersSample?.trim() ??
     "(No headers / sample file provided — use default public fetch behavior.)"
 
+  const manifestPaths = getExtractionOutputManifestPaths()
+
   const system = `You are an expert web data extraction assistant running in Hermes Agent.
 Rules:
 - Use your tools when needed to fetch and analyze the page at the given Target URL.
 - If you cannot access the URL, say so in JSON — use a single JSON object with keys like "error" and "detail" (no markdown, no prose outside JSON).
 - Your FINAL reply MUST be exactly one JSON value (usually an object) — valid JSON only: no markdown fences, no code blocks, no commentary before or after.
 - Choose property names and nesting so the result cleanly represents what the user asked to extract.
-- Treat optional headers/sample/HAR text as request context (cookies, auth, API shapes), not as the page URL.`
+- Treat optional headers/sample/HAR text as request context (cookies, auth, API shapes), not as the page URL.${fileManifestInstructions(manifestPaths)}`
+
+  const outputClosing = manifestPaths
+    ? `Follow the system prompt “Output delivery” section: save the full dataset to the configured JSON and CSV paths on the agent host, then return ONLY the small completion JSON object (status / json_file / csv_file / total_categories) — not the full extracted data inline.`
+    : `Return only JSON matching the extraction instructions above.`
 
   const user = `## Target URL
 ${targetUrl.trim()}
@@ -29,7 +56,7 @@ ${prompt.trim()}
 ${headersBlock}
 
 ## Output
-Return only JSON matching the extraction instructions above.`
+${outputClosing}`
 
   return [
     { role: "system" as const, content: system },
