@@ -42,6 +42,8 @@ import {
   consumeChatCompletionSse,
   type StreamToolEntry,
 } from "@/lib/extract/sse-client"
+import { downloadExtractionOutputFile } from "@/lib/extract/client-download-output"
+import { parseExtractionCompletionManifest } from "@/lib/extract/extraction-completion"
 import {
   jsonTextForDownload,
   parseAssistantResponse,
@@ -156,6 +158,7 @@ function RecentExtractions({
   removeBusyId,
   activeStreamingId,
   onStopStreaming,
+  outputFilesConfigured,
 }: {
   records: ExtractionRecord[]
   onRemove: (id: string) => void
@@ -163,10 +166,11 @@ function RecentExtractions({
   /** When set, the matching running row shows Stop (in-flight extraction) */
   activeStreamingId: string | null
   onStopStreaming: () => void
+  outputFilesConfigured: boolean
 }) {
   const reduceMotion = useReducedMotion()
 
-  function downloadRow(row: ExtractionRecord) {
+  function downloadRowInlineJson(row: ExtractionRecord) {
     if (!row.resultText) return
     const text = jsonTextForDownload(row.resultText)
     if (!text) return
@@ -176,6 +180,12 @@ function RecentExtractions({
     a.download = `extraction-${slugFromUrl(row.url)}-${row.id.slice(0, 8)}.json`
     a.click()
     URL.revokeObjectURL(a.href)
+  }
+
+  function rowManifest(row: ExtractionRecord) {
+    if (!row.resultText) return null
+    const { parsed } = parseAssistantResponse(row.resultText)
+    return parseExtractionCompletionManifest(parsed)
   }
 
   if (records.length === 0) {
@@ -270,19 +280,64 @@ function RecentExtractions({
                     <Trash2 className="size-4" />
                     Remove
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="rounded-xl disabled:opacity-40"
-                    aria-label="Download result"
-                    disabled={
-                      !row.resultText || !jsonTextForDownload(row.resultText)
-                    }
-                    onClick={() => downloadRow(row)}
-                  >
-                    <Download className="size-4" />
-                    Download
-                  </Button>
+                  {outputFilesConfigured ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl disabled:opacity-40"
+                        aria-label="Download JSON file"
+                        disabled={
+                          row.status !== "completed" || !rowManifest(row)
+                        }
+                        onClick={() => {
+                          const m = rowManifest(row)
+                          if (!m) return
+                          void downloadExtractionOutputFile("json", {
+                            filePath: m.json_file,
+                            slug: slugFromUrl(row.url),
+                          })
+                        }}
+                      >
+                        <Download className="size-4" />
+                        JSON
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl disabled:opacity-40"
+                        aria-label="Download CSV file"
+                        disabled={
+                          row.status !== "completed" || !rowManifest(row)
+                        }
+                        onClick={() => {
+                          const m = rowManifest(row)
+                          if (!m) return
+                          void downloadExtractionOutputFile("csv", {
+                            filePath: m.csv_file,
+                            slug: slugFromUrl(row.url),
+                          })
+                        }}
+                      >
+                        <Download className="size-4" />
+                        CSV
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-xl disabled:opacity-40"
+                      aria-label="Download result JSON"
+                      disabled={
+                        !row.resultText || !jsonTextForDownload(row.resultText)
+                      }
+                      onClick={() => downloadRowInlineJson(row)}
+                    >
+                      <Download className="size-4" />
+                      Download JSON
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -383,6 +438,8 @@ export function ExtractDashboard() {
   const [offlineModalOpen, setOfflineModalOpen] = React.useState(false)
   const [healthRetrying, setHealthRetrying] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
+  const [outputFilesConfigured, setOutputFilesConfigured] =
+    React.useState(false)
   const [lastOutcome, setLastOutcome] = React.useState<{
     ok: boolean
     content?: string
@@ -434,6 +491,22 @@ export function ExtractDashboard() {
     let cancelled = false
     void (async () => {
       try {
+        const r = await fetch("/api/extract/output-config")
+        const j = (await r.json()) as { configured?: boolean }
+        if (!cancelled) setOutputFilesConfigured(j.configured === true)
+      } catch {
+        if (!cancelled) setOutputFilesConfigured(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
         const r = await fetch("/api/extraction/catalog-models")
         const j = (await r.json()) as {
           models?: { id: string }[]
@@ -456,6 +529,11 @@ export function ExtractDashboard() {
     if (!lastOutcome?.ok || !lastOutcome.content) return null
     return parseAssistantResponse(lastOutcome.content)
   }, [lastOutcome?.ok, lastOutcome?.content])
+
+  const lastManifest = React.useMemo(() => {
+    if (!lastSplit?.parsed) return null
+    return parseExtractionCompletionManifest(lastSplit.parsed)
+  }, [lastSplit?.parsed])
 
   const displayRecords = React.useMemo(() => {
     if (!historyConfigured) {
@@ -665,6 +743,7 @@ export function ExtractDashboard() {
         body: JSON.stringify({
           targetUrl: u,
           prompt: p,
+          runId: id,
           headersSample: headersSample || undefined,
           ...(resolvedModel ? { model: resolvedModel } : {}),
         }),
@@ -949,7 +1028,7 @@ console.log(text)`
     )
   }
 
-  function downloadLastResultJson() {
+  function downloadLastResultInlineJson() {
     if (!lastOutcome?.ok || !lastOutcome.content) return
     const text = jsonTextForDownload(lastOutcome.content)
     if (!text) return
@@ -1063,8 +1142,25 @@ console.log(text)`
             <p className="text-xs leading-relaxed text-muted-foreground">
               Describe what to capture; the model is instructed to answer with
               valid JSON only (no markdown fences). After a run, use{" "}
-              <span className="font-medium text-foreground/85">Download JSON</span>{" "}
-              to save the response.
+              {outputFilesConfigured ? (
+                <>
+                  <span className="font-medium text-foreground/85">
+                    Download JSON
+                  </span>{" "}
+                  and{" "}
+                  <span className="font-medium text-foreground/85">
+                    Download CSV
+                  </span>{" "}
+                  to save files from that run&apos;s prompt folder (no overwrite).
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-foreground/85">
+                    Download JSON
+                  </span>{" "}
+                  to save the response.
+                </>
+              )}
             </p>
           </div>
 
@@ -1139,16 +1235,41 @@ console.log(text)`
                 </h3>
                 {lastOutcome.ok ? (
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    JSON is shown in the tree view; anything outside the parsed
-                    value appears under{" "}
-                    <span className="font-medium text-foreground/85">
-                      Extra text
-                    </span>
-                    . Download includes{" "}
-                    <span className="font-medium text-foreground/85">
-                      JSON only
-                    </span>
-                    .
+                    {outputFilesConfigured && lastManifest ? (
+                      <>
+                        Completion status is shown below. Full data is on disk
+                        at{" "}
+                        <code className="rounded bg-muted/50 px-1 text-[0.65rem]">
+                          {lastManifest.json_file}
+                        </code>{" "}
+                        and{" "}
+                        <code className="rounded bg-muted/50 px-1 text-[0.65rem]">
+                          {lastManifest.csv_file}
+                        </code>
+                        {lastManifest.total_categories != null ? (
+                          <>
+                            {" "}
+                            (
+                            {lastManifest.total_categories.toLocaleString()}{" "}
+                            categories)
+                          </>
+                        ) : null}
+                        .
+                      </>
+                    ) : (
+                      <>
+                        JSON is shown in the tree view; anything outside the
+                        parsed value appears under{" "}
+                        <span className="font-medium text-foreground/85">
+                          Extra text
+                        </span>
+                        . Download saves{" "}
+                        <span className="font-medium text-foreground/85">
+                          JSON from the response
+                        </span>
+                        .
+                      </>
+                    )}
                   </p>
                 ) : null}
               </div>
@@ -1164,16 +1285,58 @@ console.log(text)`
                     <Copy className="size-3.5" />
                     Copy
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="gap-1.5 rounded-lg bg-gradient-to-r from-primary to-violet-600 text-primary-foreground shadow-md hover:opacity-95 disabled:opacity-40"
-                    disabled={!lastSplit?.prettyJson}
-                    onClick={downloadLastResultJson}
-                  >
-                    <Download className="size-3.5" />
-                    Download JSON
-                  </Button>
+                  {outputFilesConfigured ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-1.5 rounded-lg bg-gradient-to-r from-primary to-violet-600 text-primary-foreground shadow-md hover:opacity-95 disabled:opacity-40"
+                        disabled={!lastManifest}
+                        onClick={() => {
+                          if (!lastManifest) return
+                          void downloadExtractionOutputFile("json", {
+                            filePath: lastManifest.json_file,
+                            slug: slugFromUrl(
+                              lastOutcome.sourceUrl ?? targetUrl
+                            ),
+                          })
+                        }}
+                      >
+                        <Download className="size-3.5" />
+                        Download JSON
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 rounded-lg disabled:opacity-40"
+                        disabled={!lastManifest}
+                        onClick={() => {
+                          if (!lastManifest) return
+                          void downloadExtractionOutputFile("csv", {
+                            filePath: lastManifest.csv_file,
+                            slug: slugFromUrl(
+                              lastOutcome.sourceUrl ?? targetUrl
+                            ),
+                          })
+                        }}
+                      >
+                        <Download className="size-3.5" />
+                        Download CSV
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-1.5 rounded-lg bg-gradient-to-r from-primary to-violet-600 text-primary-foreground shadow-md hover:opacity-95 disabled:opacity-40"
+                      disabled={!lastSplit?.prettyJson}
+                      onClick={downloadLastResultInlineJson}
+                    >
+                      <Download className="size-3.5" />
+                      Download JSON
+                    </Button>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -1274,6 +1437,7 @@ console.log(text)`
           removeBusyId={removeBusyId}
           activeStreamingId={streamingRunId}
           onStopStreaming={stopActiveExtraction}
+          outputFilesConfigured={outputFilesConfigured}
         />
       </motion.section>
 

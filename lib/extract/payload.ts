@@ -4,6 +4,8 @@ export type ExtractPayload = {
   targetUrl: string
   prompt: string
   headersSample?: string
+  /** Client run id — used for per-prompt output directory `{base}/{promptSlug}/{runId}/`. */
+  runId?: string
   /** Sent as JSON `model` on Hermes chat/completions. Hermes treats this as cosmetic; real LLM is server-side. */
   model?: string
   /** When true, server adds Oxylabs Web Unblocker proxy URLs as headers to Hermes. */
@@ -34,5 +36,12 @@ export function parseExtractJson(body: unknown): ExtractPayload {
 
   const useProxy = b.useProxy === true
 
-  return { targetUrl, prompt, headersSample, model, useProxy }
+  let runId: string | undefined
+  if (typeof b.runId === "string") {
+    const t = b.runId.trim()
+    if (t.length > 128) throw new Error("runId must be at most 128 characters")
+    if (t) runId = t
+  }
+
+  return { targetUrl, prompt, headersSample, runId, model, useProxy }
 }

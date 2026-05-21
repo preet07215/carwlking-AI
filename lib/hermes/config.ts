@@ -3,6 +3,8 @@
  * @see https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server
  */
 
+import path from "node:path"
+
 /**
  * JSON `model` on `POST /v1/chat/completions` when env vars are unset.
  * Per Hermes API docs, this field is cosmetic — the real LLM is set in Hermes server config.
@@ -19,17 +21,55 @@ function optionalMaxTokens(raw: string | undefined): number | undefined {
 }
 
 /**
- * When both paths are set, extraction system prompt tells the agent to write full data
- * to these files and reply with only a small completion JSON (see extract-messages).
+ * Root directory for per-run extraction files: `{base}/{promptSlug}/{runId}/…`
+ * Set `EXTRACTION_OUTPUT_DIR`, or derive from dirname of `EXTRACTION_OUTPUT_JSON_FILE`.
+ */
+export function getExtractionOutputBaseDir(): string | null {
+  const dir = process.env.EXTRACTION_OUTPUT_DIR?.trim()
+  if (dir) return path.resolve(dir)
+
+  const json = process.env.EXTRACTION_OUTPUT_JSON_FILE?.trim()
+  const csv = process.env.EXTRACTION_OUTPUT_CSV_FILE?.trim()
+  if (!json || !csv) return null
+  return path.resolve(path.dirname(json))
+}
+
+export function isExtractionOutputConfigured(): boolean {
+  if (process.env.EXTRACTION_OUTPUT_DIR?.trim()) return true
+  const json = process.env.EXTRACTION_OUTPUT_JSON_FILE?.trim()
+  const csv = process.env.EXTRACTION_OUTPUT_CSV_FILE?.trim()
+  return Boolean(json && csv)
+}
+
+/** Basenames used inside each `{promptSlug}/{runId}/` folder. */
+export function getExtractionOutputFilenameTemplate(): {
+  json: string
+  csv: string
+} | null {
+  if (!isExtractionOutputConfigured()) return null
+
+  const json = process.env.EXTRACTION_OUTPUT_JSON_FILE?.trim()
+  const csv = process.env.EXTRACTION_OUTPUT_CSV_FILE?.trim()
+  return {
+    json: json ? path.basename(json) : "output.json",
+    csv: csv ? path.basename(csv) : "output.csv",
+  }
+}
+
+/**
+ * @deprecated Use per-run paths from {@link buildExtractionRunOutputPaths}. Kept for callers that need a quick configured check.
  */
 export function getExtractionOutputManifestPaths(): {
   json: string
   csv: string
 } | null {
-  const json = process.env.EXTRACTION_OUTPUT_JSON_FILE?.trim()
-  const csv = process.env.EXTRACTION_OUTPUT_CSV_FILE?.trim()
-  if (!json || !csv) return null
-  return { json, csv }
+  const base = getExtractionOutputBaseDir()
+  const names = getExtractionOutputFilenameTemplate()
+  if (!base || !names) return null
+  return {
+    json: path.join(base, names.json),
+    csv: path.join(base, names.csv),
+  }
 }
 
 export function getHermesServerConfig() {

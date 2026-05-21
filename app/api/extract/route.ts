@@ -6,6 +6,7 @@ import {
   hermesChatCompletion,
 } from "@/lib/hermes/client"
 import { formatGenericHermesFailure } from "@/lib/hermes/errors"
+import { prepareExtractRun } from "@/lib/extract/prepare-extract-run"
 import { chatBodyForExtract } from "@/lib/hermes/extract-messages"
 import { getOxylabsWebUnblockerHeaderPairs } from "@/lib/proxy/oxylabs-hermes-headers"
 
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: msg }, { status: 400 })
   }
 
-  const { targetUrl, prompt, headersSample, model: modelOverride, useProxy } =
+  const { targetUrl, prompt, headersSample, runId, model: modelOverride, useProxy } =
     payload
 
   const proxyPairs = useProxy ? getOxylabsWebUnblockerHeaderPairs() : null
@@ -66,11 +67,13 @@ export async function POST(req: Request) {
   const started = Date.now()
 
   try {
+    const { outputPaths } = await prepareExtractRun({ prompt, runId })
     const chatPayload = chatBodyForExtract(
       {
         targetUrl,
         prompt,
         headersSample,
+        outputPaths,
       },
       { stream: false, model: modelOverride }
     )
